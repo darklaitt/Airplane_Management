@@ -1,5 +1,5 @@
--- Заполнение тестовыми данными
-USE airline_management;
+-- Подключение к базе данных
+\c airline_management;
 
 -- Вставка самолетов
 INSERT INTO planes (name, category, seats_count) VALUES
