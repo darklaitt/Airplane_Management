@@ -65,7 +65,7 @@ if not exist "server\.env" (
         echo DB_HOST=localhost >> "server\.env"
         echo DB_PORT=5432 >> "server\.env"
         echo DB_USER=postgres >> "server\.env"
-        echo DB_PASSWORD=postgres >> "server\.env"
+        echo DB_PASSWORD=1122 >> "server\.env"
         echo DB_NAME=airline_management >> "server\.env"
         echo JWT_SECRET=your-super-secret-jwt-key-change-in-production-min-32-chars-development >> "server\.env"
         echo JWT_REFRESH_SECRET=your-super-secret-refresh-key-change-in-production-min-32-chars-development >> "server\.env"

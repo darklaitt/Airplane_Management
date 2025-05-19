@@ -14,7 +14,7 @@ const FlightList = ({ flights, onEdit, onDelete }) => {
 
   return (
     <div className="table-responsive">
-      <table className="table">
+      <table className="table flights-table">
         <thead>
           <tr>
             <th>Номер рейса</th>

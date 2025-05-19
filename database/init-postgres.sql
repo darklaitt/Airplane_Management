@@ -1,9 +1,15 @@
--- Создание базы данных
 DROP DATABASE IF EXISTS airline_management;
-CREATE DATABASE airline_management;
+CREATE DATABASE airline_management 
+    WITH ENCODING 'UTF8' 
+    LC_COLLATE 'ru_RU.UTF-8' 
+    LC_CTYPE 'ru_RU.UTF-8'
+    TEMPLATE template0;
 
 -- Подключение к базе данных
 \c airline_management;
+
+-- Установка кодировки клиента
+SET client_encoding = 'UTF8';
 
 -- Таблица самолетов
 CREATE TABLE planes (

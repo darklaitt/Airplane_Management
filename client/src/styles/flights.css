@@ -1,0 +1,79 @@
+/* Стили для маршрутов */
+.route-cell {
+  max-width: 300px;
+  word-wrap: break-word;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+/* Стили для таблицы рейсов */
+.flights-table {
+  min-width: 100%;
+  border-collapse: collapse;
+}
+
+.flights-table th,
+.flights-table td {
+  padding: 12px 8px;
+  text-align: left;
+  border-bottom: 1px solid #e1e5e9;
+  vertical-align: middle;
+}
+
+.flights-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Адаптивность для маршрутов */
+@media (max-width: 768px) {
+  .route-cell {
+    max-width: 200px;
+    font-size: 0.9rem;
+  }
+  
+  .flights-table th,
+  .flights-table td {
+    padding: 8px 4px;
+  }
+}
+
+/* Стили для действий */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.action-buttons .btn {
+  white-space: nowrap;
+}
+
+/* Стили для бейджей статуса */
+.badge {
+  font-size: 0.85rem;
+  padding: 4px 8px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.badge-success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.badge-warning {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeeba;
+}
+
+.badge-danger {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
