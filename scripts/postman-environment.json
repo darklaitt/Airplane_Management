@@ -1,0 +1,85 @@
+{
+  "id": "airline-management-environment",
+  "name": "Airline Management Development",
+  "values": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000/api",
+      "description": "API Base URL",
+      "enabled": true
+    },
+    {
+      "key": "web_url",
+      "value": "http://localhost:3000",
+      "description": "Frontend URL",
+      "enabled": true
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "description": "JWT Access Token",
+      "enabled": true
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "description": "JWT Refresh Token",
+      "enabled": true
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "description": "Current User ID",
+      "enabled": true
+    },
+    {
+      "key": "user_role",
+      "value": "",
+      "description": "Current User Role",
+      "enabled": true
+    },
+    {
+      "key": "test_plane_id",
+      "value": "",
+      "description": "Test Plane ID for testing",
+      "enabled": true
+    },
+    {
+      "key": "test_flight_id",
+      "value": "",
+      "description": "Test Flight ID for testing",
+      "enabled": true
+    },
+    {
+      "key": "test_ticket_id",
+      "value": "",
+      "description": "Test Ticket ID for testing",
+      "enabled": true
+    },
+    {
+      "key": "admin_username",
+      "value": "admin",
+      "description": "Admin Username",
+      "enabled": true
+    },
+    {
+      "key": "admin_password",
+      "value": "admin123",
+      "description": "Admin Password",
+      "enabled": true
+    },
+    {
+      "key": "test_date_start",
+      "value": "2025-05-01",
+      "description": "Test Start Date",
+      "enabled": true
+    },
+    {
+      "key": "test_date_end",
+      "value": "2025-05-31",
+      "description": "Test End Date",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}

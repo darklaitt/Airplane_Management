@@ -1,60 +1,78 @@
-const errorHandler = (err, req, res, next) => {
-  console.error(err.stack);
+const { logger } = require('../utils/logger');
 
+const errorHandler = (err, req, res, next) => {
+  // Логируем ошибку
+  logger.error('Error occurred:', {
+    error: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method,
+    ip: req.ip,
+    userAgent: req.get('User-Agent')
+  });
+
+  // Ошибки валидации
   if (err.name === 'ValidationError') {
     return res.status(400).json({
-      error: 'Validation Error',
-      message: err.message
+      success: false,
+      message: 'Ошибки валидации',
+      errors: err.errors
     });
   }
 
+  // Ошибки подключения к БД
   if (err.code === 'ECONNREFUSED') {
     return res.status(503).json({
-      error: 'Service Unavailable',
-      message: 'Database connection failed'
+      success: false,
+      message: 'Сервис временно недоступен'
     });
   }
 
-  // PostgreSQL specific error codes
+  // PostgreSQL ошибки
   if (err.code === '23505') { // unique_violation
     return res.status(409).json({
-      error: 'Duplicate Entry',
-      message: 'A record with this value already exists'
+      success: false,
+      message: 'Запись с такими данными уже существует'
     });
   }
 
   if (err.code === '23503') { // foreign_key_violation
     return res.status(400).json({
-      error: 'Foreign Key Constraint',
-      message: 'Referenced record does not exist'
+      success: false,
+      message: 'Ссылочная целостность нарушена'
     });
   }
 
   if (err.code === '22P02') { // invalid_text_representation
     return res.status(400).json({
-      error: 'Invalid Data Type',
-      message: 'Invalid data format provided'
+      success: false,
+      message: 'Неверный формат данных'
     });
   }
 
-  if (err.code === '42P01') { // undefined_table
-    return res.status(500).json({
-      error: 'Database Error',
-      message: 'Database table not found'
+  // JWT ошибки
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      success: false,
+      message: 'Недействительный токен'
     });
   }
 
-  if (err.code === '42703') { // undefined_column
-    return res.status(500).json({
-      error: 'Database Error',
-      message: 'Database column not found'
+  if (err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      success: false,
+      message: 'Токен истек'
     });
   }
 
-  // Default error
-  res.status(err.status || 500).json({
-    error: err.name || 'Server Error',
-    message: err.message || 'An unexpected error occurred'
+  // Общая ошибка
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || 'Внутренняя ошибка сервера';
+
+  res.status(status).json({
+    success: false,
+    message: message,
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 };
 

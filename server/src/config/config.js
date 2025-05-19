@@ -51,32 +51,6 @@ module.exports = {
     message: 'Слишком много запросов, попробуйте позже'
   },
   
-  // Email configuration (для восстановления пароля, уведомлений)
-  email: {
-    service: process.env.EMAIL_SERVICE || 'gmail',
-    host: process.env.EMAIL_HOST,
-    port: parseInt(process.env.EMAIL_PORT) || 587,
-    secure: process.env.EMAIL_SECURE === 'true',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    },
-    from: process.env.EMAIL_FROM || 'noreply@airline-system.com'
-  },
-  
-  // File upload configuration
-  upload: {
-    maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024, // 5MB
-    allowedMimeTypes: [
-      'image/jpeg',
-      'image/jpg',
-      'image/png',
-      'image/gif',
-      'application/pdf'
-    ],
-    destination: process.env.UPLOAD_PATH || './uploads'
-  },
-  
   // Logging configuration
   logging: {
     level: process.env.LOG_LEVEL || 'info',
@@ -84,32 +58,6 @@ module.exports = {
     maxSize: process.env.LOG_MAX_SIZE || '10MB',
     maxFiles: parseInt(process.env.LOG_MAX_FILES) || 5,
     console: process.env.NODE_ENV === 'development'
-  },
-  
-  // Cache configuration (Redis)
-  cache: {
-    enabled: process.env.CACHE_ENABLED === 'true',
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT) || 6379,
-    password: process.env.REDIS_PASSWORD,
-    database: parseInt(process.env.REDIS_DB) || 0,
-    ttl: parseInt(process.env.CACHE_TTL) || 3600 // 1 hour
-  },
-  
-  // Backup configuration
-  backup: {
-    enabled: process.env.BACKUP_ENABLED === 'true',
-    schedule: process.env.BACKUP_SCHEDULE || '0 2 * * *', // Daily at 2 AM
-    retention: parseInt(process.env.BACKUP_RETENTION) || 30, // days
-    path: process.env.BACKUP_PATH || './backups',
-    compression: process.env.BACKUP_COMPRESSION === 'true'
-  },
-  
-  // Monitoring configuration
-  monitoring: {
-    enabled: process.env.MONITORING_ENABLED === 'true',
-    metricsPort: parseInt(process.env.METRICS_PORT) || 9090,
-    healthCheckInterval: parseInt(process.env.HEALTH_CHECK_INTERVAL) || 30000 // 30 seconds
   },
   
   // Development configuration
