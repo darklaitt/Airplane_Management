@@ -1,7 +1,7 @@
 import React, { useContext } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
-import Loader from '../components/Common/Loader';
+import { AuthContext } from '../../context/AuthContext';
+import Loader from '../Common/Loader';
 
 const ProtectedRoute = ({ children, requiredPermission = null, requiredRole = null }) => {
   const { isAuthenticated, loading, checkPermission, hasRole } = useContext(AuthContext);
@@ -45,4 +45,4 @@ const ProtectedRoute = ({ children, requiredPermission = null, requiredRole = nu
   return children;
 };
 
-export default ProtectedRoute;
+export default ProtectedRoute;  

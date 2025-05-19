@@ -1,8 +1,8 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
-import ErrorMessage from '../components/Common/ErrorMessage';
-import Loader from '../components/Common/Loader';
+import { AuthContext } from '../../context/AuthContext';
+import ErrorMessage from '../Common/ErrorMessage';
+import Loader from '../Common/Loader';
 
 const Login = () => {
   const [formData, setFormData] = useState({

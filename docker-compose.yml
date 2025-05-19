@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: airline_db
+    restart: always
+    environment:
+      POSTGRES_DB: airline_management
+      POSTGRES_USER: postgres1
+      POSTGRES_PASSWORD: postgres_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init-postgres.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./database/seed-postgres.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    networks:
+      - airline_network
+
+  server:
+    build:
+      context: ./server
+      dockerfile: ../docker/Dockerfile.server
+    container_name: airline_server
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres_password
+      - DB_NAME=airline_management
+      - CLIENT_URL=http://localhost
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+    networks:
+      - airline_network
+
+  client:
+    build:
+      context: ./client
+      dockerfile: ../docker/Dockerfile.client
+    container_name: airline_client
+    restart: always
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000/api
+    ports:
+      - "80:80"
+    depends_on:
+      - server
+    networks:
+      - airline_network
+
+volumes:
+  postgres_data:
+
+networks:
+  airline_network:
+    driver: bridge
