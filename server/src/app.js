@@ -1,319 +1,367 @@
-const { query, getClient } = require('../utils/database');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const config = require('../config/config');
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
 
-class User {
-  static async create(userData) {
-    const { username, email, password, role_id, first_name, last_name } = userData;
-    
-    // Хешируем пароль
-    const saltRounds = config.security.bcryptRounds;
-    const password_hash = await bcrypt.hash(password, saltRounds);
-    
-    const result = await query(
-      `INSERT INTO users (username, email, password_hash, role_id, first_name, last_name) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, username, email, role_id, first_name, last_name, is_active, created_at`,
-      [username, email, password_hash, role_id, first_name, last_name]
-    );
-    
-    return result[0];
-  }
+const config = require('./config/config');
+const { logger, stream } = require('./utils/logger');
+const errorHandler = require('./middlewares/errorHandler');
 
-  static async findByUsername(username) {
-    const result = await query(
-      `SELECT u.*, r.name as role_name, r.permissions 
-       FROM users u 
-       JOIN roles r ON u.role_id = r.id 
-       WHERE u.username = $1`,
-      [username]
-    );
-    return result[0];
-  }
+// Импорт маршрутов
+const planeRoutes = require('./routes/planeRoutes');
+const flightRoutes = require('./routes/flightRoutes');
+const ticketRoutes = require('./routes/ticketRoutes');
+const reportRoutes = require('./routes/reportRoutes');
+const authRoutes = require('./routes/authRoutes');
 
-  static async findByEmail(email) {
-    const result = await query(
-      `SELECT u.*, r.name as role_name, r.permissions 
-       FROM users u 
-       JOIN roles r ON u.role_id = r.id 
-       WHERE u.email = $1`,
-      [email]
-    );
-    return result[0];
-  }
+// Создание приложения Express
+const app = express();
 
-  static async findById(id) {
-    const result = await query(
-      `SELECT u.*, r.name as role_name, r.permissions 
-       FROM users u 
-       JOIN roles r ON u.role_id = r.id 
-       WHERE u.id = $1`,
-      [id]
-    );
-    return result[0];
-  }
+// Middleware для безопасности
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false
+}));
 
-  static async validatePassword(plainPassword, hashedPassword) {
-    return await bcrypt.compare(plainPassword, hashedPassword);
-  }
+// CORS настройки
+app.use(cors(config.cors));
 
-  static async updateLastLogin(userId, ipAddress) {
-    await query(
-      `UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1`,
-      [userId]
-    );
-    
-    // Логируем вход в систему
-    await this.logAction(userId, 'LOGIN', null, null, { ip_address: ipAddress });
-  }
-
-  static async incrementFailedLoginAttempts(userId) {
-    const result = await query(
-      `UPDATE users SET 
-        failed_login_attempts = failed_login_attempts + 1,
-        locked_until = CASE 
-          WHEN failed_login_attempts + 1 >= $2 THEN CURRENT_TIMESTAMP + INTERVAL '${config.security.lockoutDuration} minutes'
-          ELSE locked_until
-        END
-       WHERE id = $1 
-       RETURNING failed_login_attempts, locked_until`,
-      [userId, config.security.maxLoginAttempts]
-    );
-    return result[0];
-  }
-
-  static async resetFailedLoginAttempts(userId) {
-    await query(
-      `UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`,
-      [userId]
-    );
-  }
-
-  static generateTokens(user) {
-    const payload = {
-      id: user.id,
-      username: user.username,
-      role: user.role_name,
-      permissions: user.permissions
-    };
-
-    const accessToken = jwt.sign(payload, config.jwt.secret, { 
-      expiresIn: config.jwt.accessTokenExpiry,
-      issuer: config.jwt.issuer,
-      audience: config.jwt.audience
-    });
-    
-    const refreshToken = jwt.sign({ id: user.id }, config.jwt.refreshSecret, { 
-      expiresIn: config.jwt.refreshTokenExpiry,
-      issuer: config.jwt.issuer,
-      audience: config.jwt.audience
-    });
-
-    return { accessToken, refreshToken };
-  }
-
-  static async saveSession(userId, tokenHash, expiresAt, ipAddress, userAgent) {
-    await query(
-      `INSERT INTO user_sessions (user_id, token_hash, expires_at, ip_address, user_agent) 
-       VALUES ($1, $2, $3, $4, $5)`,
-      [userId, tokenHash, expiresAt, ipAddress, userAgent]
-    );
-  }
-
-  static async findSession(tokenHash) {
-    const result = await query(
-      `SELECT * FROM user_sessions WHERE token_hash = $1`,
-      [tokenHash]
-    );
-    return result[0];
-  }
-
-  static async removeSession(tokenHash) {
-    await query(
-      `DELETE FROM user_sessions WHERE token_hash = $1`,
-      [tokenHash]
-    );
-  }
-
-  static async logAction(userId, action, resourceType = null, resourceId = null, details = {}) {
-    await query(
-      `INSERT INTO audit_log (user_id, action, resource_type, resource_id, details, ip_address, user_agent) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [userId, action, resourceType, resourceId, JSON.stringify(details), details.ip_address, details.user_agent]
-    );
-  }
-
-  static async getAuditLogs(limit = 100, offset = 0) {
-    const result = await query(
-      `SELECT al.*, u.username, u.first_name, u.last_name 
-       FROM audit_log al 
-       LEFT JOIN users u ON al.user_id = u.id 
-       ORDER BY al.timestamp DESC 
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-    return result;
-  }
-
-  static verifyToken(token, secret) {
-    try {
-      return jwt.verify(token, secret, {
-        issuer: config.jwt.issuer,
-        audience: config.jwt.audience
-      });
-    } catch (error) {
-      return null;
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: config.rateLimit.windowMs,
+  max: config.rateLimit.max,
+  message: {
+    error: config.rateLimit.message
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Исключения для определенных IP (например, для localhost в разработке)
+  skip: (req) => {
+    if (config.nodeEnv === 'development' && req.ip === '::1') {
+      return true;
     }
+    return false;
   }
+});
 
-  static async updateProfile(userId, profileData) {
-    const { first_name, last_name, email } = profileData;
-    const result = await query(
-      `UPDATE users SET 
-        first_name = $1, 
-        last_name = $2, 
-        email = $3,
-        updated_at = CURRENT_TIMESTAMP
-       WHERE id = $4 
-       RETURNING id, username, email, first_name, last_name`,
-      [first_name, last_name, email, userId]
-    );
-    return result[0];
-  }
+app.use('/api/', limiter);
 
-  static async updatePassword(userId, newPassword) {
-    const saltRounds = config.security.bcryptRounds;
-    const password_hash = await bcrypt.hash(newPassword, saltRounds);
-    
-    await query(
-      `UPDATE users SET 
-        password_hash = $1,
-        updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2`,
-      [password_hash, userId]
-    );
-  }
+// Логирование запросов
+app.use(morgan('combined', { stream }));
 
-  static async cleanupExpiredSessions() {
-    const result = await query(
-      `DELETE FROM user_sessions WHERE expires_at < CURRENT_TIMESTAMP`
-    );
-    return result.rowCount;
-  }
+// Парсинг JSON
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  static async getUserStats(userId) {
-    const result = await query(
-      `SELECT 
-        u.username,
-        u.email,
-        u.first_name,
-        u.last_name,
-        u.last_login,
-        u.created_at,
-        r.name as role_name,
-        COUNT(al.id) as total_actions,
-        MAX(al.timestamp) as last_action
-       FROM users u
-       LEFT JOIN roles r ON u.role_id = r.id
-       LEFT JOIN audit_log al ON u.id = al.user_id
-       WHERE u.id = $1
-       GROUP BY u.id, r.name`,
-      [userId]
-    );
-    return result[0];
-  }
+// Swagger конфигурация
+if (config.development.enableSwagger) {
+  const swaggerOptions = {
+    definition: {
+      openapi: '3.0.0',
+      info: {
+        title: 'Airline Management System API',
+        version: '1.0.0',
+        description: 'API для системы управления авиаперевозками',
+        contact: {
+          name: 'МИРЭА РТУ',
+          email: 'admin@mirea.ru'
+        },
+        license: {
+          name: 'MIT',
+          url: 'https://opensource.org/licenses/MIT'
+        }
+      },
+      servers: [
+        {
+          url: `http://localhost:${config.port}/api`,
+          description: 'Development server'
+        }
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT'
+          }
+        },
+        schemas: {
+          Plane: {
+            type: 'object',
+            required: ['name', 'category', 'seats_count'],
+            properties: {
+              id: {
+                type: 'integer',
+                description: 'Уникальный идентификатор'
+              },
+              name: {
+                type: 'string',
+                description: 'Название самолета'
+              },
+              category: {
+                type: 'string',
+                enum: ['Региональный', 'Средний', 'Дальний'],
+                description: 'Категория самолета'
+              },
+              seats_count: {
+                type: 'integer',
+                minimum: 1,
+                description: 'Количество мест'
+              }
+            }
+          },
+          Flight: {
+            type: 'object',
+            required: ['flight_number', 'plane_id', 'stops', 'departure_time', 'free_seats', 'price'],
+            properties: {
+              id: {
+                type: 'integer',
+                description: 'Уникальный идентификатор'
+              },
+              flight_number: {
+                type: 'string',
+                description: 'Номер рейса'
+              },
+              plane_id: {
+                type: 'integer',
+                description: 'ID самолета'
+              },
+              stops: {
+                type: 'array',
+                items: {
+                  type: 'string'
+                },
+                description: 'Список остановок'
+              },
+              departure_time: {
+                type: 'string',
+                format: 'time',
+                description: 'Время вылета'
+              },
+              free_seats: {
+                type: 'integer',
+                minimum: 0,
+                description: 'Количество свободных мест'
+              },
+              price: {
+                type: 'number',
+                format: 'float',
+                minimum: 0,
+                description: 'Цена билета'
+              }
+            }
+          },
+          Ticket: {
+            type: 'object',
+            required: ['counter_number', 'flight_number', 'flight_date', 'sale_time'],
+            properties: {
+              id: {
+                type: 'integer',
+                description: 'Уникальный идентификатор'
+              },
+              counter_number: {
+                type: 'integer',
+                description: 'Номер кассы'
+              },
+              flight_number: {
+                type: 'string',
+                description: 'Номер рейса'
+              },
+              flight_date: {
+                type: 'string',
+                format: 'date',
+                description: 'Дата вылета'
+              },
+              sale_time: {
+                type: 'string',
+                format: 'date-time',
+                description: 'Время продажи'
+              }
+            }
+          },
+          SuccessResponse: {
+            type: 'object',
+            properties: {
+              success: {
+                type: 'boolean',
+                example: true
+              },
+              message: {
+                type: 'string',
+                example: 'Операция выполнена успешно'
+              },
+              data: {
+                type: 'object'
+              }
+            }
+          },
+          ErrorResponse: {
+            type: 'object',
+            properties: {
+              success: {
+                type: 'boolean',
+                example: false
+              },
+              message: {
+                type: 'string',
+                example: 'Произошла ошибка'
+              },
+              errors: {
+                type: 'array',
+                items: {
+                  type: 'object'
+                }
+              }
+            }
+          },
+          LoginRequest: {
+            type: 'object',
+            required: ['username', 'password'],
+            properties: {
+              username: {
+                type: 'string',
+                description: 'Имя пользователя'
+              },
+              password: {
+                type: 'string',
+                description: 'Пароль'
+              }
+            }
+          },
+          LoginResponse: {
+            type: 'object',
+            properties: {
+              success: {
+                type: 'boolean',
+                example: true
+              },
+              message: {
+                type: 'string',
+                example: 'Успешный вход в систему'
+              },
+              data: {
+                type: 'object',
+                properties: {
+                  user: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'integer' },
+                      username: { type: 'string' },
+                      email: { type: 'string' },
+                      role: { type: 'string' },
+                      permissions: { 
+                        type: 'array',
+                        items: { type: 'string' }
+                      }
+                    }
+                  },
+                  accessToken: {
+                    type: 'string',
+                    description: 'JWT токен доступа'
+                  },
+                  refreshToken: {
+                    type: 'string',
+                    description: 'JWT refresh токен'
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      security: [
+        {
+          bearerAuth: []
+        }
+      ]
+    },
+    apis: ['./src/routes/*.js', './src/controllers/*.js']
+  };
 
-  static async getAllUsers(limit = 50, offset = 0) {
-    const result = await query(
-      `SELECT 
-        u.id,
-        u.username,
-        u.email,
-        u.first_name,
-        u.last_name,
-        u.is_active,
-        u.last_login,
-        u.created_at,
-        r.name as role_name
-       FROM users u
-       JOIN roles r ON u.role_id = r.id
-       ORDER BY u.created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-    return result;
-  }
-
-  static async getUsersByRole(roleId) {
-    const result = await query(
-      `SELECT 
-        u.id,
-        u.username,
-        u.email,
-        u.first_name,
-        u.last_name,
-        u.is_active,
-        u.last_login
-       FROM users u
-       WHERE u.role_id = $1 AND u.is_active = true
-       ORDER BY u.username`,
-      [roleId]
-    );
-    return result;
-  }
-
-  static async deactivateUser(userId) {
-    await query(
-      `UPDATE users SET is_active = false WHERE id = $1`,
-      [userId]
-    );
-    
-    // Удаляем все активные сессии пользователя
-    await query(
-      `DELETE FROM user_sessions WHERE user_id = $1`,
-      [userId]
-    );
-  }
-
-  static async activateUser(userId) {
-    await query(
-      `UPDATE users SET 
-        is_active = true, 
-        failed_login_attempts = 0, 
-        locked_until = NULL 
-       WHERE id = $1`,
-      [userId]
-    );
-  }
-
-  static async changeUserRole(userId, newRoleId) {
-    const result = await query(
-      `UPDATE users SET role_id = $1 WHERE id = $2 RETURNING id`,
-      [newRoleId, userId]
-    );
-    
-    // Удаляем все активные сессии пользователя, чтобы права обновились
-    await query(
-      `DELETE FROM user_sessions WHERE user_id = $1`,
-      [userId]
-    );
-    
-    return result[0];
-  }
-
-  static async getSecurityMetrics() {
-    const result = await query(`
-      SELECT 
-        COUNT(CASE WHEN is_active = true THEN 1 END) as active_users,
-        COUNT(CASE WHEN is_active = false THEN 1 END) as inactive_users,
-        COUNT(CASE WHEN locked_until > CURRENT_TIMESTAMP THEN 1 END) as locked_users,
-        COUNT(CASE WHEN failed_login_attempts >= 3 THEN 1 END) as users_with_failed_attempts,
-        (SELECT COUNT(*) FROM user_sessions WHERE expires_at > CURRENT_TIMESTAMP) as active_sessions,
-        (SELECT COUNT(*) FROM user_sessions WHERE expires_at < CURRENT_TIMESTAMP) as expired_sessions
-      FROM users
-    `);
-    return result[0];
-  }
+  const specs = swaggerJsdoc(swaggerOptions);
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
+    customSiteTitle: 'Airline Management API',
+    customfavIcon: '/favicon.ico',
+    customCss: '.swagger-ui .topbar { display: none }',
+    swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true
+    }
+  }));
 }
 
-module.exports = User;
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: config.nodeEnv,
+    version: process.env.npm_package_version || '1.0.0',
+    memory: process.memoryUsage()
+  });
+});
+
+// API маршруты
+app.use('/api/auth', authRoutes);
+app.use('/api/planes', planeRoutes);
+app.use('/api/flights', flightRoutes);
+app.use('/api/tickets', ticketRoutes);
+app.use('/api/reports', reportRoutes);
+
+// Статические файлы (если нужно)
+if (config.nodeEnv === 'production') {
+  app.use(express.static('public'));
+}
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Маршрут ${req.originalUrl} не найден`
+  });
+});
+
+// Глобальный обработчик ошибок
+app.use(errorHandler);
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    logger.info('HTTP server closed');
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT signal received: closing HTTP server');
+  process.exit(0);
+});
+
+// Обработка неперехваченных исключений
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+module.exports = app;
