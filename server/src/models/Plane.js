@@ -1,49 +1,49 @@
-const { pool } = require('../utils/database');
+const { query } = require('../utils/database');
 
 class Plane {
   static async getAll() {
-    const [rows] = await pool.execute('SELECT * FROM planes ORDER BY id');
-    return rows;
+    const result = await query('SELECT * FROM planes ORDER BY id');
+    return result;
   }
 
   static async getById(id) {
-    const [rows] = await pool.execute('SELECT * FROM planes WHERE id = ?', [id]);
-    return rows[0];
+    const result = await query('SELECT * FROM planes WHERE id = $1', [id]);
+    return result[0];
   }
 
   static async create(planeData) {
     const { name, category, seats_count } = planeData;
-    const [result] = await pool.execute(
-      'INSERT INTO planes (name, category, seats_count) VALUES (?, ?, ?)',
+    const result = await query(
+      'INSERT INTO planes (name, category, seats_count) VALUES ($1, $2, $3) RETURNING *',
       [name, category, seats_count]
     );
-    return { id: result.insertId, ...planeData };
+    return result[0];
   }
 
   static async update(id, planeData) {
     const { name, category, seats_count } = planeData;
-    const [result] = await pool.execute(
-      'UPDATE planes SET name = ?, category = ?, seats_count = ? WHERE id = ?',
+    const result = await query(
+      'UPDATE planes SET name = $1, category = $2, seats_count = $3 WHERE id = $4 RETURNING *',
       [name, category, seats_count, id]
     );
-    if (result.affectedRows === 0) {
+    if (result.length === 0) {
       throw new Error('Plane not found');
     }
-    return { id, ...planeData };
+    return result[0];
   }
 
   static async delete(id) {
     // Check if plane is used in any flights
-    const [flights] = await pool.execute('SELECT * FROM flights WHERE plane_id = ?', [id]);
+    const flights = await query('SELECT * FROM flights WHERE plane_id = $1', [id]);
     if (flights.length > 0) {
       throw new Error('Cannot delete plane: It is used in existing flights');
     }
 
-    const [result] = await pool.execute('DELETE FROM planes WHERE id = ?', [id]);
-    if (result.affectedRows === 0) {
+    const result = await query('DELETE FROM planes WHERE id = $1 RETURNING id', [id]);
+    if (result.length === 0) {
       throw new Error('Plane not found');
     }
-    return { id };
+    return result[0];
   }
 }
 
