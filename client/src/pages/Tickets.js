@@ -176,7 +176,7 @@ const Tickets = () => {
           <div><strong>Debug Info:</strong></div>
           <div>API URL: {API_URL}</div>
           <div>Tickets count: {tickets.length}</div>
-          <div>Flights count: {flights.length}</div>
+          <div>Flights count: {flights.length}</div> 
           <div>Form open: {showForm.toString()}</div>
         </div>
       )}

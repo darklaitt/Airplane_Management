@@ -30,3 +30,60 @@ router.get('/search/by-date', logAction('GET_TICKETS_BY_DATE', 'tickets'), ticke
 router.get('/reports/sales-by-counter', logAction('GET_SALES_BY_COUNTER', 'tickets'), ticketController.getSalesByCounter);
 
 module.exports = router;
+
+/**
+ * @swagger
+ * /tickets/search/by-date:
+ *   get:
+ *     summary: Поиск билетов по дате
+ *     tags: [Tickets]
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         required: true
+ *         description: Начальная дата в формате YYYY-MM-DD
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         required: true
+ *         description: Конечная дата в формате YYYY-MM-DD
+ *     responses:
+ *       200:
+ *         description: Список найденных билетов
+ */
+
+/**
+ * @swagger
+ * /upload:
+ *   post:
+ *     summary: Загрузка файла
+ *     tags: [Files]
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: file
+ *         type: file
+ *         description: Файл для загрузки
+ *     responses:
+ *       200:
+ *         description: Файл успешно загружен
+ */
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Forms
+ *     description: Определение доступных форм и предоставление информации по каждой
+ *   - name: Questions
+ *     description: Действия с вопросами и ответами
+ *   - name: PDF and Tax Parameters
+ *     description: Управление PDF и налоговыми параметрами для генерации документов
+ *   - name: Documentation
+ *     description: Управление конфигурацией и API для генерации документации
+ */

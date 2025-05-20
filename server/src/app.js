@@ -2,6 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
+
+const fs = require('fs');
+const path = require('path');
+
 
 // Импорт маршрутов
 const authRoutes = require('./routes/authRoutes');
@@ -73,6 +79,45 @@ if (process.env.NODE_ENV === 'development') {
     res.json({ routes });
   });
 }
+
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Airline Management System API',
+      version: '1.0.0',
+      description: 'API для системы управления авиаперевозками',
+      contact: {
+        name: 'МИРЭА РТУ',
+        email: 'admin@mirea.ru',
+      },
+    },
+    servers: [
+      {
+        url: 'http://localhost:5000/api',
+        description: 'Development server',
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+    security: [
+      {
+        bearerAuth: [],
+      },
+    ],
+  },
+  apis: ['./src/routes/*.js', './src/controllers/*.js'], // путь к файлам с JSDoc аннотациями
+};
+
+const specs = swaggerJsdoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 // 404 handler
 app.use('*', (req, res) => {

@@ -35,3 +35,107 @@ router.get('/search/replacement-candidates', logAction('GET_REPLACEMENT_CANDIDAT
 router.get('/check-seats/:flightNumber', logAction('CHECK_FREE_SEATS', 'flights'), flightController.checkFreeSeats);
 
 module.exports = router;
+
+/**
+ * @swagger
+ * tags:
+ *   name: Flights
+ *   description: API для управления рейсами
+ */
+
+/**
+ * @swagger
+ * /flights:
+ *   get:
+ *     summary: Получить список всех рейсов
+ *     tags: [Flights]
+ *     responses:
+ *       200:
+ *         description: Список рейсов
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Flight'
+ */
+router.get('/', flightController.getAllFlights);
+
+/**
+ * @swagger
+ * /flights/search/nearest:
+ *   get:
+ *     summary: Найти ближайший рейс до заданного пункта
+ *     tags: [Flights]
+ *     parameters:
+ *       - in: query
+ *         name: destination
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Пункт назначения
+ *     responses:
+ *       200:
+ *         description: Найденный ближайший рейс
+ *       404:
+ *         description: Рейс не найден
+ */
+router.get('/search/nearest', flightController.findNearestFlight);
+
+/**
+ * @swagger
+ * /flights/search/non-stop:
+ *   get:
+ *     summary: Получить список рейсов без промежуточных посадок
+ *     tags: [Flights]
+ *     responses:
+ *       200:
+ *         description: Список прямых рейсов
+ */
+router.get('/search/non-stop', flightController.getFlightsWithoutStops);
+
+/**
+ * @swagger
+ * /flights/check-seats/{flightNumber}:
+ *   get:
+ *     summary: Проверить наличие свободных мест на рейс
+ *     tags: [Flights]
+ *     parameters:
+ *       - in: path
+ *         name: flightNumber
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Номер рейса (например, SU1234)
+ *     responses:
+ *       200:
+ *         description: Информация о свободных местах
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     flight_number:
+ *                       type: string
+ *                       example: SU1234
+ *                     free_seats:
+ *                       type: integer
+ *                       example: 150
+ *                     has_free_seats:
+ *                       type: boolean
+ *                       example: true
+ */
+router.get('/check-seats/:flightNumber', flightController.checkFreeSeats);
+
