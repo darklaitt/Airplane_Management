@@ -174,26 +174,6 @@ const Planes = () => {
           onClose={handleCloseForm}
         />
       </Modal>
-      
-      {/* Отладочная информация (только в development) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div style={{ 
-          position: 'fixed', 
-          bottom: '10px', 
-          right: '10px', 
-          background: '#f0f0f0', 
-          padding: '10px', 
-          borderRadius: '5px',
-          fontSize: '12px',
-          maxWidth: '300px'
-        }}>
-          <div><strong>Debug Info:</strong></div>
-          <div>API URL: {API_URL}</div>
-          <div>Planes count: {planes.length}</div>
-          <div>Loading: {loading.toString()}</div>
-          <div>Editing: {editingPlane ? editingPlane.id : 'none'}</div>
-        </div>
-      )}
     </div>
   );
 };

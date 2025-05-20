@@ -10,6 +10,7 @@ import Layout from './components/Layout/Layout';
 // Страницы
 import Home from './pages/Home';
 import Login from './pages/Login';
+import Register from './pages/Register'; // Добавляем импорт
 import Planes from './pages/Planes';
 import Flights from './pages/Flights';
 import Tickets from './pages/Tickets';
@@ -31,6 +32,7 @@ function App() {
             <Routes>
               {/* Публичные маршруты */}
               <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} /> {/* Добавляем маршрут регистрации */}
               
               {/* Защищенные маршруты */}
               <Route path="/" element={

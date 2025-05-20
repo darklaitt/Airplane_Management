@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import ErrorMessage from '../Common/ErrorMessage';
 import Loader from '../Common/Loader';
@@ -159,9 +159,15 @@ const Login = () => {
             </button>
           </form>
 
+          <div className="login-links">
+            <p>
+              Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
+            </p>
+          </div>
+
           <div className="login-footer">
             <p className="version-info">
-              Версия 1.0.0 | © 2025 МИРЭА РТУ
+              Версия 1.0.0 | © 2025
             </p>
           </div>
         </div>

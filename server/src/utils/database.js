@@ -1,61 +1,71 @@
 const { Pool } = require('pg');
-const config = require('../config/config');
 
+// Конфигурация базы данных
 const pool = new Pool({
-  host: config.database.host,
-  port: config.database.port,
-  user: config.database.user,
-  password: config.database.password,
-  database: config.database.database,
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5432,
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'postgres',
+  database: process.env.DB_NAME || 'airline_management',
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 });
 
-// Test database connection
+// Тестируем подключение при запуске
 const testConnection = async () => {
   try {
     const client = await pool.connect();
-    console.log('Database connected successfully');
+    console.log('✅ Database connected successfully');
     client.release();
+    return true;
   } catch (error) {
-    console.error('Database connection failed:', error);
-    process.exit(1);
+    console.error('❌ Database connection failed:', error.message);
+    console.log('Make sure PostgreSQL is running: docker-compose up -d postgres');
+    return false;
   }
 };
 
-// Функция для выполнения запросов
+// Функция для выполнения запросов с обработкой ошибок
 const query = async (text, params) => {
   try {
     const res = await pool.query(text, params);
     return res.rows;
   } catch (error) {
+    console.error('Database query error:', error);
     throw error;
   }
 };
 
-// Функция для транзакций
+// Функция для получения клиента для транзакций
 const getClient = async () => {
-  const client = await pool.connect();
-  const query = client.query.bind(client);
-  const release = () => client.release();
-  
-  // Monkey patch the query method to keep track of the last query
-  const timeout = setTimeout(() => {
-    console.error('A client has been checked out for more than 5 seconds!');
-  }, 5000);
-  
-  return {
-    query,
-    release: () => {
-      clearTimeout(timeout);
-      client.release();
-    },
-    beginTransaction: () => client.query('BEGIN'),
-    commitTransaction: () => client.query('COMMIT'),
-    rollbackTransaction: () => client.query('ROLLBACK'),
-  };
+  try {
+    const client = await pool.connect();
+    const query = client.query.bind(client);
+    const release = () => client.release();
+    
+    const timeout = setTimeout(() => {
+      console.error('A client has been checked out for more than 5 seconds!');
+    }, 5000);
+    
+    return {
+      query,
+      release: () => {
+        clearTimeout(timeout);
+        client.release();
+      },
+      beginTransaction: () => client.query('BEGIN'),
+      commitTransaction: () => client.query('COMMIT'),
+      rollbackTransaction: () => client.query('ROLLBACK'),
+    };
+  } catch (error) {
+    console.error('Failed to get database client:', error);
+    throw error;
+  }
 };
+
+// Проверяем подключение при загрузке модуля
+testConnection();
 
 module.exports = {
   pool,

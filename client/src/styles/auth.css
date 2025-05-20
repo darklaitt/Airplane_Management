@@ -369,3 +369,25 @@
     color: #a0aec0;
   }
 }
+
+.login-links {
+  text-align: center;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e1e5e9;
+}
+
+.login-links p {
+  margin: 0;
+  color: #666;
+}
+
+.login-links a {
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.login-links a:hover {
+  text-decoration: underline;
+}
