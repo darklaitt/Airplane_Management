@@ -1,4 +1,4 @@
-const { body, param, query } = require('express-validator');
+const { body, param, query, validationResult } = require('express-validator');
 
 /**
  * Валидация для аутентификации и авторизации

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import authService from '../../services/authService';
 import ErrorMessage from '../Common/ErrorMessage';
+import { checkPasswordStrength } from '../../utils/crypto';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -17,6 +18,7 @@ const Register = () => {
   const [success, setSuccess] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState(null);
 
   const navigate = useNavigate();
 
@@ -26,6 +28,14 @@ const Register = () => {
       ...prev,
       [name]: value
     }));
+    
+    // Проверяем силу пароля при его изменении
+    if (name === 'password' && value) {
+      setPasswordStrength(checkPasswordStrength(value));
+    } else if (name === 'password' && !value) {
+      setPasswordStrength(null);
+    }
+    
     // Очищаем ошибку при изменении ввода
     if (error) setError(null);
   };
@@ -64,7 +74,10 @@ const Register = () => {
       setError('Пароль должен содержать минимум 6 символов');
       return false;
     }
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
+    
+    // Расширенная проверка пароля
+    const strengthCheck = checkPasswordStrength(formData.password);
+    if (strengthCheck.score < 3) {
       setError('Пароль должен содержать хотя бы одну строчную букву, одну заглавную букву и одну цифру');
       return false;
     }
@@ -122,6 +135,17 @@ const Register = () => {
       setError(err.message || 'Ошибка регистрации');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getPasswordStrengthColor = (strength) => {
+    switch (strength) {
+      case 'Очень слабый': return '#dc3545';
+      case 'Слабый': return '#fd7e14';
+      case 'Средний': return '#ffc107';
+      case 'Сильный': return '#20c997';
+      case 'Очень сильный': return '#28a745';
+      default: return '#6c757d';
     }
   };
 
@@ -242,6 +266,28 @@ const Register = () => {
                   {showPassword ? '👁️' : '👁️‍🗨️'}
                 </button>
               </div>
+              
+              {/* Индикатор силы пароля */}
+              {passwordStrength && (
+                <div className="password-strength" style={{ marginTop: '0.5rem' }}>
+                  <div className="password-strength-bar">
+                    <div 
+                      className="password-strength-fill"
+                      style={{
+                        width: `${passwordStrength.percentage}%`,
+                        backgroundColor: getPasswordStrengthColor(passwordStrength.strength),
+                        height: '4px',
+                        borderRadius: '2px',
+                        transition: 'all 0.3s ease'
+                      }}
+                    />
+                  </div>
+                  <small style={{ color: getPasswordStrengthColor(passwordStrength.strength) }}>
+                    Сила пароля: {passwordStrength.strength}
+                  </small>
+                </div>
+              )}
+              
               <small className="form-text">
                 Минимум 6 символов, должен содержать буквы разного регистра и цифры
               </small>

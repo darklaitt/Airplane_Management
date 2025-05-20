@@ -1,28 +1,103 @@
 const express = require('express');
 const flightController = require('../controllers/flightController');
+const { authenticateToken, checkPermission, logAction } = require('../middlewares/auth');
+const { flightValidation, handleValidationErrors } = require('../middlewares/validation');
 
 const router = express.Router();
 
-// Добавляем логирование для отладки
-router.use((req, res, next) => {
-  console.log(`[FLIGHTS] ${req.method} ${req.originalUrl}`);
-  next();
-});
+// Все маршруты требуют аутентификации
+router.use(authenticateToken);
 
-// CRUD операции
-router.get('/', flightController.getAllFlights);
-router.get('/:id', flightController.getFlightById);
-router.post('/', flightController.createFlight);
-router.put('/:id', flightController.updateFlight);
-router.delete('/:id', flightController.deleteFlight);
+// CRUD operations
+router.get('/', 
+  checkPermission('flights:read'),
+  logAction('GET_FLIGHTS', 'flights'),
+  flightController.getAllFlights
+);
 
-// Специальные запросы
-router.get('/search/nearest', flightController.findNearestFlight);
-router.get('/search/non-stop', flightController.getFlightsWithoutStops);
-router.get('/search/most-expensive', flightController.getMostExpensiveFlight);
-router.get('/search/replacement-candidates', flightController.getFlightsForPlaneReplacement);
-router.get('/check-seats/:flightNumber', flightController.checkFreeSeats);
-router.get('/plane/:planeId', flightController.getFlightsByPlane);
-router.get('/load/:flightNumber', flightController.getFlightLoad);
+router.get('/:id', 
+  flightValidation.getById,
+  handleValidationErrors,
+  checkPermission('flights:read'),
+  logAction('GET_FLIGHT', 'flights'),
+  flightController.getFlightById
+);
+
+router.post('/', 
+  flightValidation.create,
+  handleValidationErrors,
+  checkPermission('flights:write'),
+  logAction('CREATE_FLIGHT', 'flights'),
+  flightController.createFlight
+);
+
+router.put('/:id', 
+  flightValidation.update,
+  handleValidationErrors,
+  checkPermission('flights:write'),
+  logAction('UPDATE_FLIGHT', 'flights'),
+  flightController.updateFlight
+);
+
+router.delete('/:id', 
+  flightValidation.delete,
+  handleValidationErrors,
+  checkPermission('flights:delete'),
+  logAction('DELETE_FLIGHT', 'flights'),
+  flightController.deleteFlight
+);
+
+// Special queries (все требуют права на чтение)
+router.get('/search/nearest', 
+  flightValidation.findNearest,
+  handleValidationErrors,
+  checkPermission('flights:read'),
+  logAction('SEARCH_NEAREST_FLIGHT', 'flights'),
+  flightController.findNearestFlight
+);
+
+router.get('/search/non-stop', 
+  checkPermission('flights:read'),
+  logAction('GET_NON_STOP_FLIGHTS', 'flights'),
+  flightController.getFlightsWithoutStops
+);
+
+router.get('/plane/:planeId', 
+  flightValidation.getByPlane,
+  handleValidationErrors,
+  checkPermission('flights:read'),
+  logAction('GET_FLIGHTS_BY_PLANE', 'flights'),
+  flightController.getFlightsByPlane
+);
+
+router.get('/load/:flightNumber', 
+  flightValidation.getFlightLoad,
+  handleValidationErrors,
+  checkPermission('flights:read'),
+  logAction('GET_FLIGHT_LOAD', 'flights'),
+  flightController.getFlightLoad
+);
+
+router.get('/search/most-expensive', 
+  checkPermission('flights:read'),
+  logAction('GET_MOST_EXPENSIVE_FLIGHT', 'flights'),
+  flightController.getMostExpensiveFlight
+);
+
+router.get('/search/replacement-candidates', 
+  flightValidation.getReplacementCandidates,
+  handleValidationErrors,
+  checkPermission('flights:read'),
+  logAction('GET_REPLACEMENT_CANDIDATES', 'flights'),
+  flightController.getFlightsForPlaneReplacement
+);
+
+router.get('/check-seats/:flightNumber', 
+  flightValidation.checkSeats,
+  handleValidationErrors,
+  checkPermission('flights:read'),
+  logAction('CHECK_FLIGHT_SEATS', 'flights'),
+  flightController.checkFreeSeats
+);
 
 module.exports = router;

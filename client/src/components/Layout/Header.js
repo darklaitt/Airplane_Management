@@ -83,6 +83,9 @@ const Header = () => {
               <Link to="/login" className="btn btn-light">
                 🔑 Войти
               </Link>
+              <Link to="/register" className="btn btn-outline-light">
+                📝 Регистрация
+              </Link>
             </div>
           )}
         </nav>
