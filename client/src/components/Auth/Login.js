@@ -35,14 +35,6 @@ const Login = () => {
       setError('Введите пароль');
       return false;
     }
-    if (formData.username.length < 3) {
-      setError('Имя пользователя должно содержать минимум 3 символа');
-      return false;
-    }
-    if (formData.password.length < 6) {
-      setError('Пароль должен содержать минимум 6 символов');
-      return false;
-    }
     return true;
   };
 
@@ -58,7 +50,8 @@ const Login = () => {
       await login(formData.username, formData.password);
       navigate('/');
     } catch (err) {
-      setError(err.message || 'Ошибка входа в систему');
+      console.error('Login error:', err);
+      setError(err.message || 'Ошибка входа в систему. Попробуйте позже.');
     } finally {
       setLoading(false);
     }
@@ -98,12 +91,8 @@ const Login = () => {
                   placeholder="Введите имя пользователя"
                   autoComplete="username"
                   disabled={loading}
-                  aria-describedby="username-help"
                 />
               </div>
-              <small id="username-help" className="form-text">
-                Минимум 3 символа, только буквы, цифры и подчеркивания
-              </small>
             </div>
 
             <div className="form-group">
@@ -121,7 +110,6 @@ const Login = () => {
                   placeholder="Введите пароль"
                   autoComplete="current-password"
                   disabled={loading}
-                  aria-describedby="password-help"
                 />
                 <button
                   type="button"
@@ -133,9 +121,6 @@ const Login = () => {
                   {showPassword ? '👁️' : '👁️‍🗨️'}
                 </button>
               </div>
-              <small id="password-help" className="form-text">
-                Минимум 6 символов
-              </small>
             </div>
 
             {error && <ErrorMessage message={error} type="danger" />}
@@ -144,28 +129,22 @@ const Login = () => {
               type="submit"
               className="btn btn-primary login-btn"
               disabled={loading || !formData.username || !formData.password}
-              aria-label="Войти в систему"
             >
               {loading ? (
                 <>
-                  <span className="spinner"></span>
+                  <Loader />
                   Вход...
                 </>
               ) : (
-                <>
-                  🚪 Войти
-                </>
+                '🚪 Войти'
               )}
             </button>
           </form>
 
-          <div className="login-links">
+          <div className="login-footer">
             <p>
               Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
             </p>
-          </div>
-
-          <div className="login-footer">
             <p className="version-info">
               Версия 1.0.0 | © 2025
             </p>

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 
 const Header = () => {
-  const { user, isAuthenticated, logout } = useContext(AuthContext);
+  const { user, isAuthenticated, logout, getUserDisplayName } = useContext(AuthContext);
   const location = useLocation();
 
   const handleLogout = () => {
@@ -15,6 +15,22 @@ const Header = () => {
   const isActiveRoute = (path) => {
     return location.pathname === path ? 'active' : '';
   };
+
+  // Map roles to human-readable names and colors
+  const roleInfo = {
+    admin: { name: 'Администратор', className: 'badge-danger' },
+    manager: { name: 'Менеджер', className: 'badge-warning' },
+    cashier: { name: 'Кассир', className: 'badge-success' },
+    analyst: { name: 'Аналитик', className: 'badge-info' }
+  };
+
+  // Get role display info
+  const getRoleDisplay = () => {
+    if (!user || !user.role) return { name: 'Пользователь', className: 'badge-secondary' };
+    return roleInfo[user.role] || { name: user.role, className: 'badge-secondary' };
+  };
+
+  const roleDisplay = getRoleDisplay();
 
   return (
     <header className="header">
@@ -63,10 +79,10 @@ const Header = () => {
               <div className="navbar-user">
                 <div className="user-info">
                   <span className="user-greeting">
-                    👋 Привет, {user?.first_name || user?.username}!
+                    👋 {getUserDisplayName()}
                   </span>
-                  <span className="user-role badge badge-info">
-                    {user?.role || 'Пользователь'}
+                  <span className={`user-role badge ${roleDisplay.className}`}>
+                    {roleDisplay.name}
                   </span>
                 </div>
                 <button 
@@ -83,7 +99,7 @@ const Header = () => {
               <Link to="/login" className="btn btn-light">
                 🔑 Войти
               </Link>
-              <Link to="/register" className="btn btn-outline-light">
+              <Link to="/register" className="btn btn-outline-light ms-2">
                 📝 Регистрация
               </Link>
             </div>

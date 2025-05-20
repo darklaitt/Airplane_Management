@@ -1,29 +1,45 @@
 const { Pool } = require('pg');
+const config = require('../config/config');
 
-// Конфигурация базы данных
 const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5432,
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  database: process.env.DB_NAME || 'airline_management',
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  host: config.database.host,
+  port: config.database.port,
+  user: config.database.user,
+  password: config.database.password,
+  database: config.database.database,
+  max: config.database.max,
+  idleTimeoutMillis: config.database.idleTimeoutMillis,
+  connectionTimeoutMillis: config.database.connectionTimeoutMillis,
+  acquireTimeoutMillis: config.database.acquireTimeoutMillis,
+  createTimeoutMillis: config.database.createTimeoutMillis,
+  reapIntervalMillis: config.database.reapIntervalMillis,
+  createRetryIntervalMillis: config.database.createRetryIntervalMillis,
+  ssl: config.database.ssl
 });
 
-// Тестируем подключение при запуске
-const testConnection = async () => {
-  try {
-    const client = await pool.connect();
-    console.log('✅ Database connected successfully');
-    client.release();
-    return true;
-  } catch (error) {
-    console.error('❌ Database connection failed:', error.message);
-    console.log('Make sure PostgreSQL is running: docker-compose up -d postgres');
-    return false;
+// Test database connection with retry logic
+const testConnection = async (retries = 5) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const client = await pool.connect();
+      console.log('✅ База данных подключена успешно');
+      client.release();
+      return true;
+    } catch (error) {
+      console.log(`❌ Database connection failed: ${error.message}`);
+      if (i === retries - 1) {
+        if (error.code === 'ECONNREFUSED') {
+          console.log('Make sure PostgreSQL is running: docker-compose up -d postgres');
+        }
+        // Не останавливаем сервер, продолжаем работу без БД
+        console.log('⚠️  Сервер будет работать в режиме без базы данных');
+        return false;
+      }
+      // Ждем перед повторной попыткой
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
   }
+  return false;
 };
 
 // Функция для выполнения запросов с обработкой ошибок
@@ -37,15 +53,17 @@ const query = async (text, params) => {
   }
 };
 
-// Функция для получения клиента для транзакций
+// Функция для транзакций
 const getClient = async () => {
   try {
     const client = await pool.connect();
     const query = client.query.bind(client);
     const release = () => client.release();
     
+    // Автоматическое освобождение через 5 секунд
     const timeout = setTimeout(() => {
       console.error('A client has been checked out for more than 5 seconds!');
+      client.release();
     }, 5000);
     
     return {
@@ -64,8 +82,18 @@ const getClient = async () => {
   }
 };
 
-// Проверяем подключение при загрузке модуля
-testConnection();
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('Closing database pool...');
+  await pool.end();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Closing database pool...');
+  await pool.end();
+  process.exit(0);
+});
 
 module.exports = {
   pool,

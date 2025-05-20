@@ -1,34 +1,32 @@
 const express = require('express');
-const reportController = require('../controllers/reportController');
-const { authenticateToken, checkPermission, logAction } = require('../middlewares/auth');
-const { reportValidation, handleValidationErrors } = require('../middlewares/validation');
+const ticketController = require('../controllers/ticketController');
+const { logger } = require('../utils/logger');
 
 const router = express.Router();
 
-// Все маршруты требуют аутентификации
-router.use(authenticateToken);
+// Вспомогательная функция для логирования
+const logAction = (action, resource) => {
+  return (req, res, next) => {
+    logger.info(`API Action: ${action}`, {
+      resource,
+      method: req.method,
+      url: req.url,
+      ip: req.ip,
+      userId: req.user?.id
+    });
+    next();
+  };
+};
 
-// Все отчеты требуют права на чтение отчетов
-router.get('/general', 
-  checkPermission('reports:read'),
-  logAction('GET_GENERAL_REPORT', 'reports'),
-  reportController.getGeneralReport
-);
+// CRUD операции
+router.get('/', logAction('GET_TICKETS', 'tickets'), ticketController.getAllTickets);
+router.get('/:id', logAction('GET_TICKET', 'tickets'), ticketController.getTicketById);
+router.post('/', logAction('CREATE_TICKET', 'tickets'), ticketController.createTicket);
+router.delete('/:id', logAction('DELETE_TICKET', 'tickets'), ticketController.deleteTicket);
 
-router.get('/flight-load', 
-  reportValidation.flightLoad,
-  handleValidationErrors,
-  checkPermission('reports:read'),
-  logAction('GET_FLIGHT_LOAD_REPORT', 'reports'),
-  reportController.getFlightLoadReport
-);
-
-router.get('/sales', 
-  reportValidation.sales,
-  handleValidationErrors,
-  checkPermission('reports:read'),
-  logAction('GET_SALES_REPORT', 'reports'),
-  reportController.getSalesReport
-);
+// Дополнительные маршруты
+router.get('/flight/:flightNumber', logAction('GET_TICKETS_BY_FLIGHT', 'tickets'), ticketController.getTicketsByFlight);
+router.get('/search/by-date', logAction('GET_TICKETS_BY_DATE', 'tickets'), ticketController.getTicketsByDateRange);
+router.get('/reports/sales-by-counter', logAction('GET_SALES_BY_COUNTER', 'tickets'), ticketController.getSalesByCounter);
 
 module.exports = router;

@@ -2,78 +2,67 @@ import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
-// Создаем экземпляр axios с базовой конфигурацией
+// Create axios instance with default configuration
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 10000, // Таймаут 10 секунд
+  timeout: 10000,
   headers: {
-    'Content-Type': 'application/json',
-  },
+    'Content-Type': 'application/json'
+  }
 });
 
-// Interceptor для добавления токена аутентификации
+// Request interceptor to add authorization token
 api.interceptors.request.use(
   (config) => {
+    // Get token from localStorage
     const token = localStorage.getItem('access_token');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
-    
-    // Логируем запросы в development режиме
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
-    }
-    
     return config;
   },
   (error) => {
-    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
-// Interceptor для обработки ответов и автоматического обновления токена
+// Response interceptor for global error handling and token refresh
 api.interceptors.response.use(
   (response) => {
-    // Логируем успешные ответы в development режиме
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url} - ${response.status}`);
-    }
-    
-    // Возвращаем только данные ответа
+    // Directly return response data to simplify usage
     return response.data;
   },
   async (error) => {
     const originalRequest = error.config;
     
-    // Логируем ошибки
-    console.error(`❌ API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url} - ${error.response?.status || 'Network Error'}`);
-    
-    // Если получили 401 (Unauthorized) и это не повторный запрос
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Handle token expiration (401 Unauthorized)
+    if (error.response && error.response.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
       try {
+        // Try to refresh the token
         const refreshToken = localStorage.getItem('refresh_token');
-        if (refreshToken) {
-          // Пытаемся обновить токен
-          const response = await api.post('/auth/refresh', { refreshToken });
-          const { accessToken } = response.data;
-          
-          // Обновляем токен в localStorage
-          localStorage.setItem('access_token', accessToken);
-          
-          // Повторяем оригинальный запрос с новым токеном
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          return api(originalRequest);
+        if (!refreshToken) {
+          throw new Error('No refresh token available');
         }
+        
+        const response = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+        const newAccessToken = response.data.data.accessToken;
+        
+        // Update token in localStorage
+        localStorage.setItem('access_token', newAccessToken);
+        
+        // Update header and retry the original request
+        originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+        return axios(originalRequest);
       } catch (refreshError) {
-        // Если обновление токена не удалось, очищаем localStorage и перенаправляем на login
+        // If refresh fails, redirect to login
+        console.error('Token refresh failed:', refreshError);
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
         
-        // Перенаправляем на страницу входа
+        // Redirect to login page
         if (window.location.pathname !== '/login') {
           window.location.href = '/login';
         }
@@ -82,77 +71,28 @@ api.interceptors.response.use(
       }
     }
     
-    // Обработка различных типов ошибок
+    // Extract error message from response
+    let errorMessage = 'Произошла ошибка при обработке запроса';
+    
     if (error.response) {
-      // Сервер ответил с ошибкой
-      const errorMessage = error.response.data?.message || 'Произошла ошибка на сервере';
-      const customError = new Error(errorMessage);
-      customError.status = error.response.status;
-      customError.data = error.response.data;
-      throw customError;
+      // The server responded with an error status
+      errorMessage = error.response.data.message || errorMessage;
     } else if (error.request) {
-      // Запрос был сделан, но ответ не получен
-      throw new Error('Нет ответа от сервера. Проверьте подключение к интернету.');
+      // The request was made but no response was received
+      errorMessage = 'Сервер не отвечает. Проверьте подключение к интернету.';
     } else {
-      // Что-то пошло не так при настройке запроса
-      throw new Error('Ошибка при выполнении запроса');
+      // Something happened in setting up the request
+      errorMessage = error.message;
     }
+    
+    // Create a standardized error object
+    const enhancedError = new Error(errorMessage);
+    enhancedError.status = error.response?.status;
+    enhancedError.data = error.response?.data;
+    enhancedError.originalError = error;
+    
+    return Promise.reject(enhancedError);
   }
 );
-
-// Функции для работы с состоянием загрузки
-let loadingCounter = 0;
-const loadingListeners = new Set();
-
-export const addLoadingListener = (callback) => {
-  loadingListeners.add(callback);
-};
-
-export const removeLoadingListener = (callback) => {
-  loadingListeners.delete(callback);
-};
-
-const notifyLoadingListeners = (isLoading) => {
-  loadingListeners.forEach(callback => callback(isLoading));
-};
-
-// Добавляем счетчик загрузки
-api.interceptors.request.use(
-  (config) => {
-    loadingCounter++;
-    if (loadingCounter === 1) {
-      notifyLoadingListeners(true);
-    }
-    return config;
-  }
-);
-
-api.interceptors.response.use(
-  (response) => {
-    loadingCounter = Math.max(0, loadingCounter - 1);
-    if (loadingCounter === 0) {
-      notifyLoadingListeners(false);
-    }
-    return response;
-  },
-  (error) => {
-    loadingCounter = Math.max(0, loadingCounter - 1);
-    if (loadingCounter === 0) {
-      notifyLoadingListeners(false);
-    }
-    return Promise.reject(error);
-  }
-);
-
-// Функция для проверки статуса API
-export const checkApiHealth = async () => {
-  try {
-    const response = await api.get('/health');
-    return response;
-  } catch (error) {
-    console.error('API health check failed:', error);
-    throw error;
-  }
-};
 
 export default api;

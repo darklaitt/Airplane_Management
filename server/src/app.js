@@ -3,93 +3,93 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 
+// Импорт маршрутов
+const authRoutes = require('./routes/authRoutes');
+const planeRoutes = require('./routes/planeRoutes');
+const flightRoutes = require('./routes/flightRoutes');
+const ticketRoutes = require('./routes/ticketRoutes');
+const reportRoutes = require('./routes/reportRoutes');
+
+// Создание приложения Express
 const app = express();
+
+// Middleware для безопасности
+app.use(helmet());
 
 // CORS настройки
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  credentials: true
 }));
+
+// Логирование запросов
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+}
 
 // Парсинг JSON
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Базовые middleware
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false
-}));
-
-// Логирование
-app.use(morgan('dev'));
-
-// Отладочный middleware
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path}`);
-  next();
-});
-
-// Health check
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
-    version: '1.0.0'
+    version: process.env.npm_package_version || '1.0.0'
   });
 });
 
-// Подключение маршрутов
-const authRoutes = require('./routes/authRoutes');
+// API маршруты
 app.use('/api/auth', authRoutes);
+app.use('/api/planes', planeRoutes);
+app.use('/api/flights', flightRoutes);
+app.use('/api/tickets', ticketRoutes);
+app.use('/api/reports', reportRoutes);
 
-// Другие маршруты (если есть)
-try {
-  const planeRoutes = require('./routes/planeRoutes');
-  app.use('/api/planes', planeRoutes);
-} catch (e) {
-  console.log('planeRoutes not found, skipping...');
-}
-
-try {
-  const flightRoutes = require('./routes/flightRoutes');
-  app.use('/api/flights', flightRoutes);
-} catch (e) {
-  console.log('flightRoutes not found, skipping...');
-}
-
-try {
-  const ticketRoutes = require('./routes/ticketRoutes');
-  app.use('/api/tickets', ticketRoutes);
-} catch (e) {
-  console.log('ticketRoutes not found, skipping...');
-}
-
-try {
-  const reportRoutes = require('./routes/reportRoutes');
-  app.use('/api/reports', reportRoutes);
-} catch (e) {
-  console.log('reportRoutes not found, skipping...');
+// Debug middleware - показывает все регистрированные маршруты
+if (process.env.NODE_ENV === 'development') {
+  app.get('/debug/routes', (req, res) => {
+    const routes = [];
+    app._router.stack.forEach((middleware) => {
+      if (middleware.route) {
+        routes.push({
+          path: middleware.route.path,
+          methods: Object.keys(middleware.route.methods)
+        });
+      } else if (middleware.name === 'router') {
+        middleware.handle.stack.forEach((handler) => {
+          if (handler.route) {
+            routes.push({
+              path: middleware.regexp.source.replace('\\/?', '').replace('(?=\\/|$)', '') + handler.route.path,
+              methods: Object.keys(handler.route.methods)
+            });
+          }
+        });
+      }
+    });
+    res.json({ routes });
+  });
 }
 
 // 404 handler
 app.use('*', (req, res) => {
+  console.log(`404 - Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     success: false,
     message: `Маршрут ${req.originalUrl} не найден`
   });
 });
 
-// Error handler
-app.use((error, req, res, next) => {
-  console.error('Error:', error);
+// Глобальный обработчик ошибок
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
   res.status(500).json({
     success: false,
-    message: 'Внутренняя ошибка сервера'
+    message: 'Внутренняя ошибка сервера',
+    ...(process.env.NODE_ENV === 'development' && { error: err.message })
   });
 });
 

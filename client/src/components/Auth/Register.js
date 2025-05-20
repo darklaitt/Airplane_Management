@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import authService from '../../services/authService';
+import { AuthContext } from '../../context/AuthContext';
 import ErrorMessage from '../Common/ErrorMessage';
-import { checkPasswordStrength } from '../../utils/crypto';
+import Loader from '../Common/Loader';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -18,8 +18,8 @@ const Register = () => {
   const [success, setSuccess] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState(null);
 
+  const { register } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -28,14 +28,6 @@ const Register = () => {
       ...prev,
       [name]: value
     }));
-    
-    // Проверяем силу пароля при его изменении
-    if (name === 'password' && value) {
-      setPasswordStrength(checkPasswordStrength(value));
-    } else if (name === 'password' && !value) {
-      setPasswordStrength(null);
-    }
-    
     // Очищаем ошибку при изменении ввода
     if (error) setError(null);
   };
@@ -50,21 +42,18 @@ const Register = () => {
       setError('Имя пользователя должно содержать минимум 3 символа');
       return false;
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
-      setError('Имя пользователя может содержать только буквы, цифры и подчеркивания');
-      return false;
-    }
-
+    
     // Проверка email
     if (!formData.email) {
       setError('Введите email');
       return false;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
       setError('Введите корректный email адрес');
       return false;
     }
-
+    
     // Проверка пароля
     if (!formData.password) {
       setError('Введите пароль');
@@ -75,13 +64,6 @@ const Register = () => {
       return false;
     }
     
-    // Расширенная проверка пароля
-    const strengthCheck = checkPasswordStrength(formData.password);
-    if (strengthCheck.score < 3) {
-      setError('Пароль должен содержать хотя бы одну строчную букву, одну заглавную букву и одну цифру');
-      return false;
-    }
-
     // Проверка подтверждения пароля
     if (!formData.confirmPassword) {
       setError('Подтвердите пароль');
@@ -91,17 +73,7 @@ const Register = () => {
       setError('Пароли не совпадают');
       return false;
     }
-
-    // Проверка имени и фамилии (опционально)
-    if (formData.first_name && !/^[а-яё\s\-a-z]+$/i.test(formData.first_name)) {
-      setError('Имя может содержать только буквы, пробелы и дефисы');
-      return false;
-    }
-    if (formData.last_name && !/^[а-яё\s\-a-z]+$/i.test(formData.last_name)) {
-      setError('Фамилия может содержать только буквы, пробелы и дефисы');
-      return false;
-    }
-
+    
     return true;
   };
 
@@ -115,37 +87,27 @@ const Register = () => {
     setSuccess(null);
 
     try {
-      const registrationData = {
+      const userData = {
         username: formData.username,
         email: formData.email,
         password: formData.password,
         first_name: formData.first_name || null,
-        last_name: formData.last_name || null,
-        role_id: 4 // По умолчанию роль "analyst"
+        last_name: formData.last_name || null
       };
 
-      await authService.register(registrationData);
-      setSuccess('Регистрация успешна! Теперь вы можете войти в систему.');
+      await register(userData);
       
-      // Перенаправляем на страницу входа через 2 секунды
+      setSuccess('Регистрация успешна! Сейчас вы будете перенаправлены на страницу входа.');
+      
+      // Redirect to login page after 2 seconds
       setTimeout(() => {
         navigate('/login');
       }, 2000);
     } catch (err) {
-      setError(err.message || 'Ошибка регистрации');
+      console.error('Registration error:', err);
+      setError(err.message || 'Ошибка при регистрации. Попробуйте позже.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const getPasswordStrengthColor = (strength) => {
-    switch (strength) {
-      case 'Очень слабый': return '#dc3545';
-      case 'Слабый': return '#fd7e14';
-      case 'Средний': return '#ffc107';
-      case 'Сильный': return '#20c997';
-      case 'Очень сильный': return '#28a745';
-      default: return '#6c757d';
     }
   };
 
@@ -266,31 +228,6 @@ const Register = () => {
                   {showPassword ? '👁️' : '👁️‍🗨️'}
                 </button>
               </div>
-              
-              {/* Индикатор силы пароля */}
-              {passwordStrength && (
-                <div className="password-strength" style={{ marginTop: '0.5rem' }}>
-                  <div className="password-strength-bar">
-                    <div 
-                      className="password-strength-fill"
-                      style={{
-                        width: `${passwordStrength.percentage}%`,
-                        backgroundColor: getPasswordStrengthColor(passwordStrength.strength),
-                        height: '4px',
-                        borderRadius: '2px',
-                        transition: 'all 0.3s ease'
-                      }}
-                    />
-                  </div>
-                  <small style={{ color: getPasswordStrengthColor(passwordStrength.strength) }}>
-                    Сила пароля: {passwordStrength.strength}
-                  </small>
-                </div>
-              )}
-              
-              <small className="form-text">
-                Минимум 6 символов, должен содержать буквы разного регистра и цифры
-              </small>
             </div>
 
             <div className="form-group">
@@ -332,13 +269,11 @@ const Register = () => {
             >
               {loading ? (
                 <>
-                  <span className="spinner"></span>
+                  <div className="spinner"></div>
                   Регистрация...
                 </>
               ) : (
-                <>
-                  📝 Зарегистрироваться
-                </>
+                '📝 Зарегистрироваться'
               )}
             </button>
           </form>
@@ -348,7 +283,7 @@ const Register = () => {
               Уже есть аккаунт? <Link to="/login">Войти</Link>
             </p>
             <p className="version-info">
-              Версия 1.0.0 | © 2025 МИРЭА РТУ
+              Версия 1.0.0 | © 2025
             </p>
           </div>
         </div>
