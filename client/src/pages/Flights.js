@@ -288,27 +288,6 @@ const Flights = () => {
           onClose={() => setShowSearch(false)}
         />
       </Modal>
-      
-      {/* Отладочная информация */}
-      {process.env.NODE_ENV === 'development' && (
-        <div style={{ 
-          position: 'fixed', 
-          bottom: '10px', 
-          left: '10px', 
-          background: '#f0f0f0', 
-          padding: '10px', 
-          borderRadius: '5px',
-          fontSize: '12px',
-          maxWidth: '300px'
-        }}>
-          <div><strong>Debug Info:</strong></div>
-          <div>API URL: {API_URL}</div>
-          <div>Flights count: {flights.length}</div>
-          <div>Planes count: {planes.length}</div>
-          <div>Editing: {editingFlight ? editingFlight.id : 'none'}</div>
-          <div>Search results: {searchResults ? 'yes' : 'no'}</div>
-        </div>
-      )}
     </div>
   );
 };

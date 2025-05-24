@@ -160,26 +160,6 @@ const Tickets = () => {
           onClose={handleCloseForm}
         />
       </Modal>
-      
-      {/* Отладочная информация */}
-      {process.env.NODE_ENV === 'development' && (
-        <div style={{ 
-          position: 'fixed', 
-          bottom: '60px', 
-          left: '10px', 
-          background: '#f0f0f0', 
-          padding: '10px', 
-          borderRadius: '5px',
-          fontSize: '12px',
-          maxWidth: '300px'
-        }}>
-          <div><strong>Debug Info:</strong></div>
-          <div>API URL: {API_URL}</div>
-          <div>Tickets count: {tickets.length}</div>
-          <div>Flights count: {flights.length}</div> 
-          <div>Form open: {showForm.toString()}</div>
-        </div>
-      )}
     </div>
   );
 };
