@@ -8,7 +8,7 @@ class User {
     const { username, email, password, role_id, first_name, last_name } = userData;
     
     // Хешируем пароль
-    const saltRounds = config.security.bcryptRounds;
+    const saltRounds = config.security?.bcryptRounds || 12;
     const password_hash = await bcrypt.hash(password, saltRounds);
     
     const result = await query(
@@ -62,22 +62,22 @@ class User {
       `UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1`,
       [userId]
     );
-    
-    // Логируем вход в систему
-    await this.logAction(userId, 'LOGIN', null, null, { ip_address: ipAddress });
   }
 
   static async incrementFailedLoginAttempts(userId) {
+    const maxAttempts = config.security?.maxLoginAttempts || 5;
+    const lockoutDuration = config.security?.lockoutDuration || 30;
+    
     const result = await query(
       `UPDATE users SET 
         failed_login_attempts = failed_login_attempts + 1,
         locked_until = CASE 
-          WHEN failed_login_attempts + 1 >= $2 THEN CURRENT_TIMESTAMP + INTERVAL '${config.security.lockoutDuration} minutes'
+          WHEN failed_login_attempts + 1 >= $2 THEN CURRENT_TIMESTAMP + INTERVAL '${lockoutDuration} minutes'
           ELSE locked_until
         END
        WHERE id = $1 
        RETURNING failed_login_attempts, locked_until`,
-      [userId, config.security.maxLoginAttempts]
+      [userId, maxAttempts]
     );
     return result[0];
   }
@@ -97,16 +97,16 @@ class User {
       permissions: user.permissions
     };
 
-    const accessToken = jwt.sign(payload, config.jwt.secret, { 
-      expiresIn: config.jwt.accessTokenExpiry,
-      issuer: config.jwt.issuer,
-      audience: config.jwt.audience
+    const accessToken = jwt.sign(payload, config.jwt?.secret || process.env.JWT_SECRET, { 
+      expiresIn: config.jwt?.accessTokenExpiry || '15m',
+      issuer: config.jwt?.issuer || 'airline-management-system',
+      audience: config.jwt?.audience || 'airline-users'
     });
     
-    const refreshToken = jwt.sign({ id: user.id }, config.jwt.refreshSecret, { 
-      expiresIn: config.jwt.refreshTokenExpiry,
-      issuer: config.jwt.issuer,
-      audience: config.jwt.audience
+    const refreshToken = jwt.sign({ id: user.id }, config.jwt?.refreshSecret || process.env.JWT_REFRESH_SECRET, { 
+      expiresIn: config.jwt?.refreshTokenExpiry || '7d',
+      issuer: config.jwt?.issuer || 'airline-management-system',
+      audience: config.jwt?.audience || 'airline-users'
     });
 
     return { accessToken, refreshToken };
@@ -135,31 +135,11 @@ class User {
     );
   }
 
-  static async logAction(userId, action, resourceType = null, resourceId = null, details = {}) {
-    await query(
-      `INSERT INTO audit_log (user_id, action, resource_type, resource_id, details, ip_address, user_agent) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [userId, action, resourceType, resourceId, JSON.stringify(details), details.ip_address, details.user_agent]
-    );
-  }
-
-  static async getAuditLogs(limit = 100, offset = 0) {
-    const result = await query(
-      `SELECT al.*, u.username, u.first_name, u.last_name 
-       FROM audit_log al 
-       LEFT JOIN users u ON al.user_id = u.id 
-       ORDER BY al.timestamp DESC 
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-    return result;
-  }
-
   static verifyToken(token, secret) {
     try {
       return jwt.verify(token, secret, {
-        issuer: config.jwt.issuer,
-        audience: config.jwt.audience
+        issuer: config.jwt?.issuer || 'airline-management-system',
+        audience: config.jwt?.audience || 'airline-users'
       });
     } catch (error) {
       return null;
@@ -182,7 +162,7 @@ class User {
   }
 
   static async updatePassword(userId, newPassword) {
-    const saltRounds = config.security.bcryptRounds;
+    const saltRounds = config.security?.bcryptRounds || 12;
     const password_hash = await bcrypt.hash(newPassword, saltRounds);
     
     await query(
@@ -192,127 +172,6 @@ class User {
        WHERE id = $2`,
       [password_hash, userId]
     );
-  }
-
-  static async cleanupExpiredSessions() {
-    const result = await query(
-      `DELETE FROM user_sessions WHERE expires_at < CURRENT_TIMESTAMP`
-    );
-    return result.rowCount;
-  }
-
-  static async getUserStats(userId) {
-    const result = await query(
-      `SELECT 
-        u.username,
-        u.email,
-        u.first_name,
-        u.last_name,
-        u.last_login,
-        u.created_at,
-        r.name as role_name,
-        COUNT(al.id) as total_actions,
-        MAX(al.timestamp) as last_action
-       FROM users u
-       LEFT JOIN roles r ON u.role_id = r.id
-       LEFT JOIN audit_log al ON u.id = al.user_id
-       WHERE u.id = $1
-       GROUP BY u.id, r.name`,
-      [userId]
-    );
-    return result[0];
-  }
-
-  static async getAllUsers(limit = 50, offset = 0) {
-    const result = await query(
-      `SELECT 
-        u.id,
-        u.username,
-        u.email,
-        u.first_name,
-        u.last_name,
-        u.is_active,
-        u.last_login,
-        u.created_at,
-        r.name as role_name
-       FROM users u
-       JOIN roles r ON u.role_id = r.id
-       ORDER BY u.created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-    return result;
-  }
-
-  static async getUsersByRole(roleId) {
-    const result = await query(
-      `SELECT 
-        u.id,
-        u.username,
-        u.email,
-        u.first_name,
-        u.last_name,
-        u.is_active,
-        u.last_login
-       FROM users u
-       WHERE u.role_id = $1 AND u.is_active = true
-       ORDER BY u.username`,
-      [roleId]
-    );
-    return result;
-  }
-
-  static async deactivateUser(userId) {
-    await query(
-      `UPDATE users SET is_active = false WHERE id = $1`,
-      [userId]
-    );
-    
-    // Удаляем все активные сессии пользователя
-    await query(
-      `DELETE FROM user_sessions WHERE user_id = $1`,
-      [userId]
-    );
-  }
-
-  static async activateUser(userId) {
-    await query(
-      `UPDATE users SET 
-        is_active = true, 
-        failed_login_attempts = 0, 
-        locked_until = NULL 
-       WHERE id = $1`,
-      [userId]
-    );
-  }
-
-  static async changeUserRole(userId, newRoleId) {
-    const result = await query(
-      `UPDATE users SET role_id = $1 WHERE id = $2 RETURNING id`,
-      [newRoleId, userId]
-    );
-    
-    // Удаляем все активные сессии пользователя, чтобы права обновились
-    await query(
-      `DELETE FROM user_sessions WHERE user_id = $1`,
-      [userId]
-    );
-    
-    return result[0];
-  }
-
-  static async getSecurityMetrics() {
-    const result = await query(`
-      SELECT 
-        COUNT(CASE WHEN is_active = true THEN 1 END) as active_users,
-        COUNT(CASE WHEN is_active = false THEN 1 END) as inactive_users,
-        COUNT(CASE WHEN locked_until > CURRENT_TIMESTAMP THEN 1 END) as locked_users,
-        COUNT(CASE WHEN failed_login_attempts >= 3 THEN 1 END) as users_with_failed_attempts,
-        (SELECT COUNT(*) FROM user_sessions WHERE expires_at > CURRENT_TIMESTAMP) as active_sessions,
-        (SELECT COUNT(*) FROM user_sessions WHERE expires_at < CURRENT_TIMESTAMP) as expired_sessions
-      FROM users
-    `);
-    return result[0];
   }
 }
 

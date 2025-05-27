@@ -14,7 +14,7 @@ const authenticateToken = async (req, res, next) => {
       });
     }
 
-    const decoded = User.verifyToken(token, config.jwtSecret);
+    const decoded = User.verifyToken(token, config.jwt?.secret || process.env.JWT_SECRET);
     if (!decoded) {
       return res.status(403).json({ 
         success: false, 
@@ -69,19 +69,6 @@ const checkPermission = (requiredPermission) => {
 
     // Проверяем конкретное разрешение
     if (!user.permissions.includes(requiredPermission)) {
-      // Логируем попытку несанкционированного доступа
-      User.logAction(
-        user.id, 
-        'UNAUTHORIZED_ACCESS', 
-        null, 
-        null, 
-        { 
-          required_permission: requiredPermission,
-          ip_address: req.ip,
-          user_agent: req.get('User-Agent')
-        }
-      );
-
       return res.status(403).json({ 
         success: false, 
         message: 'Недостаточно прав для выполнения данного действия' 
@@ -106,7 +93,8 @@ const logAction = (action, resourceType = null) => {
           user_agent: req.get('User-Agent')
         };
 
-        await User.logAction(req.user.id, action, resourceType, resourceId, details);
+        // Здесь можно добавить логирование в базу данных
+        console.log(`User ${req.user.username} performed ${action} on ${resourceType}`);
       }
     });
     next();

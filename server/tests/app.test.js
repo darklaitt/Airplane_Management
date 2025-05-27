@@ -1,16 +1,23 @@
 const request = require('supertest');
 const app = require('../src/app');
-const { testConnection } = require('../src/utils/database');
 
 // Mock database connection
 jest.mock('../src/utils/database', () => ({
   testConnection: jest.fn(),
-  query: jest.fn(),
+  query: jest.fn().mockResolvedValue([]),
   getClient: jest.fn()
+}));
+
+// Mock User model for auth middleware
+jest.mock('../src/models/User', () => ({
+  verifyToken: jest.fn(),
+  findById: jest.fn()
 }));
 
 describe('Express App', () => {
   beforeAll(async () => {
+    // Setup mocks
+    const { testConnection } = require('../src/utils/database');
     testConnection.mockResolvedValue(true);
   });
 
@@ -49,10 +56,11 @@ describe('Express App', () => {
         .expect(400); // Validation error expected
     });
 
-    it('should have planes routes', async () => {
+    it('should have planes routes - unauthorized access', async () => {
+      // Проверяем что БЕЗ токена возвращается 401
       await request(app)
         .get('/api/planes')
-        .expect(401); // Unauthorized expected
+        .expect(401); // Unauthorized expected for protected route
     });
   });
 });
