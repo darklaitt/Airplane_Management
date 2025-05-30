@@ -1,26 +1,33 @@
 const express = require('express');
 const reportController = require('../controllers/reportController');
-const { logger } = require('../utils/logger');
+const { authenticateToken, checkPermission } = require('../middlewares/auth'); // Исправлен путь
+const { reportValidation, handleValidationErrors } = require('../middlewares/validation');
 
 const router = express.Router();
 
-// Вспомогательная функция для логирования
-const logAction = (action, resource) => {
-  return (req, res, next) => {
-    logger.info(`API Action: ${action}`, {
-      resource,
-      method: req.method,
-      url: req.url,
-      ip: req.ip,
-      userId: req.user?.id
-    });
-    next();
-  };
-};
+// Применяем аутентификацию ко всем маршрутам
+router.use(authenticateToken);
 
-// Маршруты отчетов
-router.get('/general', logAction('GET_GENERAL_REPORT', 'reports'), reportController.getGeneralReport);
-router.get('/flight-load', logAction('GET_FLIGHT_LOAD_REPORT', 'reports'), reportController.getFlightLoadReport);
-router.get('/sales', logAction('GET_SALES_REPORT', 'reports'), reportController.getSalesReport);
+// Общий отчет
+router.get('/general', 
+  checkPermission('reports:read'),
+  reportController.getGeneralReport
+);
+
+// Отчет по загруженности рейсов
+router.get('/flight-load', 
+  reportValidation.flightLoad,
+  handleValidationErrors,
+  checkPermission('reports:read'),
+  reportController.getFlightLoadReport
+);
+
+// Отчет по продажам
+router.get('/sales', 
+  reportValidation.sales,
+  handleValidationErrors,
+  checkPermission('reports:read'),
+  reportController.getSalesReport
+);
 
 module.exports = router;

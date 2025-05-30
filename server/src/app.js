@@ -2,12 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const swaggerUi = require('swagger-ui-express');
-const swaggerJsdoc = require('swagger-jsdoc');
+const rateLimit = require('express-rate-limit');
 
-const fs = require('fs');
-const path = require('path');
-
+const config = require('./config/config');
+const { logger, stream } = require('./utils/logger');
+const errorHandler = require('./middlewares/errorHandler');
 
 // Импорт маршрутов
 const authRoutes = require('./routes/authRoutes');
@@ -20,17 +19,49 @@ const reportRoutes = require('./routes/reportRoutes');
 const app = express();
 
 // Middleware для безопасности
-app.use(helmet());
-
-// CORS настройки
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  credentials: true
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false
 }));
 
+// CORS настройки
+app.use(cors(config.cors));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: config.rateLimit?.windowMs || 15 * 60 * 1000, // 15 minutes
+  max: config.rateLimit?.max || 100, // limit each IP to 100 requests per windowMs
+  message: {
+    error: config.rateLimit?.message || 'Too many requests'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Исключения для определенных IP (например, для localhost в разработке)
+  skip: (req) => {
+    if (config.nodeEnv === 'development' && (req.ip === '::1' || req.ip === '127.0.0.1')) {
+      return true;
+    }
+    return false;
+  }
+});
+
+app.use('/api/', limiter);
+
 // Логирование запросов
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
+if (config.nodeEnv !== 'test') {
+  app.use(morgan('combined', { stream }));
 }
 
 // Парсинг JSON
@@ -43,8 +74,9 @@ app.get('/health', (req, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development',
-    version: process.env.npm_package_version || '1.0.0'
+    environment: config.nodeEnv,
+    version: process.env.npm_package_version || '1.0.0',
+    memory: process.memoryUsage()
   });
 });
 
@@ -55,73 +87,45 @@ app.use('/api/flights', flightRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/reports', reportRoutes);
 
-// Debug middleware - показывает все регистрированные маршруты
-if (process.env.NODE_ENV === 'development') {
-  app.get('/debug/routes', (req, res) => {
-    const routes = [];
-    app._router.stack.forEach((middleware) => {
-      if (middleware.route) {
-        routes.push({
-          path: middleware.route.path,
-          methods: Object.keys(middleware.route.methods)
-        });
-      } else if (middleware.name === 'router') {
-        middleware.handle.stack.forEach((handler) => {
-          if (handler.route) {
-            routes.push({
-              path: middleware.regexp.source.replace('\\/?', '').replace('(?=\\/|$)', '') + handler.route.path,
-              methods: Object.keys(handler.route.methods)
-            });
+// Swagger конфигурация (опционально)
+if (config.development?.enableSwagger && config.nodeEnv === 'development') {
+  try {
+    const swaggerUi = require('swagger-ui-express');
+    const swaggerJsdoc = require('swagger-jsdoc');
+
+    const swaggerOptions = {
+      definition: {
+        openapi: '3.0.0',
+        info: {
+          title: 'Airline Management System API',
+          version: '1.0.0',
+          description: 'API для системы управления авиаперевозками',
+        },
+        servers: [
+          {
+            url: `http://localhost:${config.port}/api`,
+            description: 'Development server'
           }
-        });
-      }
-    });
-    res.json({ routes });
-  });
+        ],
+      },
+      apis: ['./src/routes/*.js', './src/controllers/*.js'],
+    };
+
+    const specs = swaggerJsdoc(swaggerOptions);
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+    logger.info('Swagger documentation enabled at /api-docs');
+  } catch (error) {
+    logger.warn('Swagger not available:', error.message);
+  }
 }
 
-const swaggerOptions = {
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'Airline Management System API',
-      version: '1.0.0',
-      description: 'API для системы управления авиаперевозками',
-      contact: {
-        name: 'МИРЭА РТУ',
-        email: 'admin@mirea.ru',
-      },
-    },
-    servers: [
-      {
-        url: 'http://localhost:5000/api',
-        description: 'Development server',
-      },
-    ],
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
-        },
-      },
-    },
-    security: [
-      {
-        bearerAuth: [],
-      },
-    ],
-  },
-  apis: ['./src/routes/*.js', './src/controllers/*.js'], // путь к файлам с JSDoc аннотациями
-};
-
-const specs = swaggerJsdoc(swaggerOptions);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+// Статические файлы (если нужно)
+if (config.nodeEnv === 'production') {
+  app.use(express.static('public'));
+}
 
 // 404 handler
 app.use('*', (req, res) => {
-  console.log(`404 - Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     success: false,
     message: `Маршрут ${req.originalUrl} не найден`
@@ -129,13 +133,6 @@ app.use('*', (req, res) => {
 });
 
 // Глобальный обработчик ошибок
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({
-    success: false,
-    message: 'Внутренняя ошибка сервера',
-    ...(process.env.NODE_ENV === 'development' && { error: err.message })
-  });
-});
+app.use(errorHandler);
 
 module.exports = app;

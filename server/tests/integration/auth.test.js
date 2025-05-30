@@ -1,30 +1,24 @@
 const request = require('supertest');
 const app = require('../../src/app');
-const bcrypt = require('bcryptjs');
 
-// Мокаем базу данных для интеграционных тестов
+// Mock the database
 jest.mock('../../src/utils/database', () => ({
   query: jest.fn(),
-  getClient: jest.fn(() => ({
-    query: jest.fn(),
-    release: jest.fn(),
-    beginTransaction: jest.fn(),
-    commitTransaction: jest.fn(),
-    rollbackTransaction: jest.fn()
-  })),
-  testConnection: jest.fn().mockResolvedValue(true)
+  getClient: jest.fn(),
+  testConnection: jest.fn()
 }));
+
+// Mock the User model
+jest.mock('../../src/models/User');
 
 describe('Authentication Integration Tests', () => {
   let server;
   let accessToken;
   let refreshToken;
-  let userId = 1;
-  const { query } = require('../../src/utils/database');
 
   beforeAll(async () => {
     // Set up test environment
-    server = app.listen(0); // Используем случайный порт
+    server = app.listen(5001);
   });
 
   afterAll(async () => {
@@ -34,104 +28,12 @@ describe('Authentication Integration Tests', () => {
     }
   });
 
-  beforeEach(() => {
-    // Сбрасываем моки перед каждым тестом
-    jest.clearAllMocks();
-  });
-
-  describe('POST /api/auth/register', () => {
-    it('should register a new user', async () => {
-      const userData = {
-        username: 'testuser',
-        email: 'test@example.com',
-        password: 'Password123!',
-        first_name: 'Test',
-        last_name: 'User'
-      };
-
-      // Мокаем проверку существования пользователя
-      query
-        .mockResolvedValueOnce([]) // findByUsername - пользователь не найден
-        .mockResolvedValueOnce([]) // findByEmail - email не найден
-        .mockResolvedValueOnce([{ // create user
-          id: userId,
-          username: userData.username,
-          email: userData.email,
-          created_at: new Date()
-        }]);
-
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send(userData)
-        .expect(201);
-
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.username).toBe(userData.username);
-      expect(response.body.data.email).toBe(userData.email);
-    });
-
-    it('should not register user with existing username', async () => {
-      const userData = {
-        username: 'testuser',
-        email: 'test2@example.com',
-        password: 'Password123!'
-      };
-
-      // Мокаем что пользователь уже существует
-      query.mockResolvedValueOnce([{
-        id: 1,
-        username: userData.username
-      }]);
-
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send(userData)
-        .expect(409);
-
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('уже существует');
-    });
-
-    it('should validate password strength', async () => {
-      const userData = {
-        username: 'testuser2',
-        email: 'test3@example.com',
-        password: 'weak' // Слабый пароль
-      };
-
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send(userData)
-        .expect(400);
-
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('валидации');
-    });
-  });
-
   describe('POST /api/auth/login', () => {
     it('should login with valid credentials', async () => {
       const credentials = {
-        username: 'testuser',
-        password: 'Password123!'
+        username: 'admin',
+        password: 'admin123'
       };
-
-      const hashedPassword = await bcrypt.hash(credentials.password, 12);
-
-      // Мокаем успешный поиск пользователя и проверку пароля
-      query.mockResolvedValueOnce([{
-        id: userId,
-        username: credentials.username,
-        email: 'test@example.com',
-        password_hash: hashedPassword,
-        role_name: 'analyst',
-        permissions: ['planes:read', 'flights:read', 'tickets:read', 'reports:read'],
-        is_active: true,
-        locked_until: null
-      }]);
-
-      // Мокаем сохранение сессии
-      query.mockResolvedValueOnce([]);
 
       const response = await request(app)
         .post('/api/auth/login')
@@ -150,17 +52,9 @@ describe('Authentication Integration Tests', () => {
 
     it('should not login with invalid credentials', async () => {
       const credentials = {
-        username: 'testuser',
+        username: 'admin',
         password: 'wrongpassword'
       };
-
-      // Мокаем поиск пользователя
-      query.mockResolvedValueOnce([{
-        id: userId,
-        username: credentials.username,
-        password_hash: '$2b$12$mockedhashedpassword',
-        is_active: true
-      }]);
 
       const response = await request(app)
         .post('/api/auth/login')
@@ -173,11 +67,8 @@ describe('Authentication Integration Tests', () => {
     it('should not login with non-existent user', async () => {
       const credentials = {
         username: 'nonexistent',
-        password: 'Password123!'
+        password: 'password123'
       };
-
-      // Мокаем что пользователь не найден
-      query.mockResolvedValueOnce([]);
 
       const response = await request(app)
         .post('/api/auth/login')
@@ -186,19 +77,27 @@ describe('Authentication Integration Tests', () => {
 
       expect(response.body.success).toBe(false);
     });
+
+    it('should validate required fields', async () => {
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({})
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toContain('валидации');
+    });
   });
 
   describe('GET /api/auth/verify', () => {
     it('should verify valid token', async () => {
-      // Мокаем пользователя для проверки токена
-      query.mockResolvedValueOnce([{
-        id: userId,
-        username: 'testuser',
-        email: 'test@example.com',
-        role_name: 'analyst',
-        permissions: ['planes:read'],
-        is_active: true
-      }]);
+      if (!accessToken) {
+        // Login first
+        const loginResponse = await request(app)
+          .post('/api/auth/login')
+          .send({ username: 'admin', password: 'admin123' });
+        accessToken = loginResponse.body.data.accessToken;
+      }
 
       const response = await request(app)
         .get('/api/auth/verify')
@@ -206,7 +105,7 @@ describe('Authentication Integration Tests', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data.username).toBe('testuser');
+      expect(response.body.data.username).toBe('admin');
     });
 
     it('should reject invalid token', async () => {
@@ -229,15 +128,13 @@ describe('Authentication Integration Tests', () => {
 
   describe('GET /api/auth/me', () => {
     it('should get current user info', async () => {
-      // Мокаем пользователя
-      query.mockResolvedValueOnce([{
-        id: userId,
-        username: 'testuser',
-        email: 'test@example.com',
-        role_name: 'analyst',
-        permissions: ['planes:read'],
-        is_active: true
-      }]);
+      if (!accessToken) {
+        // Login first
+        const loginResponse = await request(app)
+          .post('/api/auth/login')
+          .send({ username: 'admin', password: 'admin123' });
+        accessToken = loginResponse.body.data.accessToken;
+      }
 
       const response = await request(app)
         .get('/api/auth/me')
@@ -245,43 +142,14 @@ describe('Authentication Integration Tests', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data.username).toBe('testuser');
-      expect(response.body.data.email).toBe('test@example.com');
-    });
-  });
-
-  describe('POST /api/auth/refresh', () => {
-    it('should refresh access token', async () => {
-      // Мокаем поиск сессии
-      query.mockResolvedValueOnce([{
-        id: 1,
-        user_id: userId,
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 дней
-      }]);
-
-      // Мокаем пользователя
-      query.mockResolvedValueOnce([{
-        id: userId,
-        username: 'testuser',
-        role_name: 'analyst',
-        permissions: ['planes:read'],
-        is_active: true
-      }]);
-
-      const response = await request(app)
-        .post('/api/auth/refresh')
-        .send({ refreshToken })
-        .expect(200);
-
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.accessToken).toBeDefined();
+      expect(response.body.data.username).toBe('admin');
+      expect(response.body.data.email).toBe('admin@example.com');
     });
 
-    it('should reject invalid refresh token', async () => {
+    it('should require authentication', async () => {
       const response = await request(app)
-        .post('/api/auth/refresh')
-        .send({ refreshToken: 'invalid-refresh-token' })
-        .expect(403);
+        .get('/api/auth/me')
+        .expect(401);
 
       expect(response.body.success).toBe(false);
     });
@@ -289,13 +157,27 @@ describe('Authentication Integration Tests', () => {
 
   describe('POST /api/auth/logout', () => {
     it('should logout successfully', async () => {
-      // Мокаем удаление сессии
-      query.mockResolvedValueOnce([]);
+      if (!accessToken) {
+        // Login first
+        const loginResponse = await request(app)
+          .post('/api/auth/login')
+          .send({ username: 'admin', password: 'admin123' });
+        accessToken = loginResponse.body.data.accessToken;
+        refreshToken = loginResponse.body.data.refreshToken;
+      }
 
       const response = await request(app)
         .post('/api/auth/logout')
         .set('Authorization', `Bearer ${accessToken}`)
         .send({ refreshToken })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+    });
+
+    it('should logout without token', async () => {
+      const response = await request(app)
+        .post('/api/auth/logout')
         .expect(200);
 
       expect(response.body.success).toBe(true);

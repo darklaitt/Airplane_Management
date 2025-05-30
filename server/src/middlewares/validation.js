@@ -222,6 +222,69 @@ const flightValidation = {
       .isFloat({ min: 0.01, max: 1000000 })
       .withMessage('Цена должна быть от 0.01 до 1,000,000')
       .toFloat()
+  ],
+
+  // Остальные валидации...
+  getById: [
+    param('id')
+      .isInt({ min: 1 })
+      .withMessage('Некорректный ID рейса')
+      .toInt()
+  ],
+
+  delete: [
+    param('id')
+      .isInt({ min: 1 })
+      .withMessage('Некорректный ID рейса')
+      .toInt()
+  ],
+
+  findNearest: [
+    query('destination')
+      .isLength({ min: 1, max: 100 })
+      .withMessage('Пункт назначения должен содержать от 1 до 100 символов')
+      .matches(/^[а-яё\s\-a-z]+$/i)
+      .withMessage('Пункт назначения может содержать только буквы, пробелы и дефисы')
+      .trim()
+  ],
+
+  getByPlane: [
+    param('planeId')
+      .isInt({ min: 1 })
+      .withMessage('Некорректный ID самолета')
+      .toInt()
+  ],
+
+  getFlightLoad: [
+    param('flightNumber')
+      .matches(/^[A-Z0-9]{2,10}$/)
+      .withMessage('Некорректный номер рейса')
+      .trim(),
+    
+    query('startDate')
+      .isISO8601()
+      .withMessage('Некорректная дата начала (формат: YYYY-MM-DD)')
+      .toDate(),
+    
+    query('endDate')
+      .isISO8601()
+      .withMessage('Некорректная дата окончания (формат: YYYY-MM-DD)')
+      .toDate()
+  ],
+
+  checkSeats: [
+    param('flightNumber')
+      .matches(/^[A-Z0-9]{2,10}$/)
+      .withMessage('Некорректный номер рейса')
+      .trim()
+  ],
+
+  getReplacementCandidates: [
+    query('minFreeSeatsPercentage')
+      .optional()
+      .isFloat({ min: 0, max: 100 })
+      .withMessage('Процент свободных мест должен быть от 0 до 100')
+      .toFloat()
   ]
 };
 
@@ -258,6 +321,164 @@ const ticketValidation = {
       .isISO8601()
       .withMessage('Некорректное время продажи (формат: YYYY-MM-DDTHH:mm:ss)')
       .toDate()
+      .custom((saleTime) => {
+        const now = new Date();
+        const maxTime = new Date(now.getTime() + 24 * 60 * 60 * 1000); // +24 часа
+        if (saleTime > maxTime) {
+          throw new Error('Время продажи не может быть в далеком будущем');
+        }
+        return true;
+      })
+  ],
+
+  // Валидация получения билета по ID
+  getById: [
+    param('id')
+      .isInt({ min: 1 })
+      .withMessage('Некорректный ID билета')
+      .toInt()
+  ],
+
+  // Валидация удаления билета
+  delete: [
+    param('id')
+      .isInt({ min: 1 })
+      .withMessage('Некорректный ID билета')
+      .toInt()
+  ],
+
+  // Валидация получения билетов по рейсу
+  getByFlight: [
+    param('flightNumber')
+      .matches(/^[A-Z0-9]{2,10}$/)
+      .withMessage('Некорректный номер рейса')
+      .trim()
+  ],
+
+  // Валидация получения билетов по диапазону дат
+  getByDateRange: [
+    query('startDate')
+      .isISO8601()
+      .withMessage('Некорректная дата начала (формат: YYYY-MM-DD)')
+      .toDate(),
+    
+    query('endDate')
+      .isISO8601()
+      .withMessage('Некорректная дата окончания (формат: YYYY-MM-DD)')
+      .toDate()
+      .custom((endDate, { req }) => {
+        if (endDate <= req.query.startDate) {
+          throw new Error('Дата окончания должна быть больше даты начала');
+        }
+        const daysDiff = (endDate - req.query.startDate) / (1000 * 60 * 60 * 24);
+        if (daysDiff > 365) {
+          throw new Error('Период не может превышать 365 дней');
+        }
+        return true;
+      })
+  ],
+
+  // Валидация получения продаж по кассам
+  getSalesByCounter: [
+    query('startDate')
+      .isISO8601()
+      .withMessage('Некорректная дата начала (формат: YYYY-MM-DD)')
+      .toDate(),
+    
+    query('endDate')
+      .isISO8601()
+      .withMessage('Некорректная дата окончания (формат: YYYY-MM-DD)')
+      .toDate()
+      .custom((endDate, { req }) => {
+        if (endDate <= req.query.startDate) {
+          throw new Error('Дата окончания должна быть больше даты начала');
+        }
+        return true;
+      })
+  ]
+};
+
+/**
+ * Валидация для отчетов
+ */
+const reportValidation = {
+  // Валидация отчета по загруженности рейсов
+  flightLoad: [
+    query('startDate')
+      .isISO8601()
+      .withMessage('Некорректная дата начала (формат: YYYY-MM-DD)')
+      .toDate(),
+    
+    query('endDate')
+      .isISO8601()
+      .withMessage('Некорректная дата окончания (формат: YYYY-MM-DD)')
+      .toDate()
+      .custom((endDate, { req }) => {
+        if (endDate <= req.query.startDate) {
+          throw new Error('Дата окончания должна быть больше даты начала');
+        }
+        return true;
+      })
+  ],
+
+  // Валидация отчета по продажам
+  sales: [
+    query('startDate')
+      .isISO8601()
+      .withMessage('Некорректная дата начала (формат: YYYY-MM-DD)')
+      .toDate(),
+    
+    query('endDate')
+      .isISO8601()
+      .withMessage('Некорректная дата окончания (формат: YYYY-MM-DD)')
+      .toDate()
+      .custom((endDate, { req }) => {
+        if (endDate <= req.query.startDate) {
+          throw new Error('Дата окончания должна быть больше даты начала');
+        }
+        return true;
+      })
+  ]
+};
+
+/**
+ * Общие валидационные функции
+ */
+const commonValidation = {
+  // Валидация ID в параметрах
+  idParam: [
+    param('id')
+      .isInt({ min: 1 })
+      .withMessage('Некорректный ID')
+      .toInt()
+  ],
+
+  // Валидация пагинации
+  pagination: [
+    query('page')
+      .optional()
+      .isInt({ min: 1, max: 1000 })
+      .withMessage('Номер страницы должен быть от 1 до 1000')
+      .toInt(),
+    
+    query('limit')
+      .optional()
+      .isInt({ min: 1, max: 100 })
+      .withMessage('Лимит записей должен быть от 1 до 100')
+      .toInt()
+  ],
+
+  // Валидация сортировки
+  sorting: [
+    query('sortBy')
+      .optional()
+      .isAlpha()
+      .withMessage('Поле сортировки может содержать только буквы'),
+    
+    query('sortDirection')
+      .optional()
+      .isIn(['asc', 'desc'])
+      .withMessage('Направление сортировки должно быть asc или desc')
   ]
 };
 
@@ -285,5 +506,7 @@ module.exports = {
   planeValidation,
   flightValidation,
   ticketValidation,
+  reportValidation,
+  commonValidation,
   handleValidationErrors
 };

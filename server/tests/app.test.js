@@ -4,19 +4,16 @@ const app = require('../src/app');
 // Mock database connection
 jest.mock('../src/utils/database', () => ({
   testConnection: jest.fn(),
-  query: jest.fn().mockResolvedValue([]),
+  query: jest.fn(),
   getClient: jest.fn()
 }));
 
-// Mock User model for auth middleware
-jest.mock('../src/models/User', () => ({
-  verifyToken: jest.fn(),
-  findById: jest.fn()
-}));
+// Mock User model
+jest.mock('../src/models/User');
 
 describe('Express App', () => {
   beforeAll(async () => {
-    // Setup mocks
+    // Mock database connection
     const { testConnection } = require('../src/utils/database');
     testConnection.mockResolvedValue(true);
   });
@@ -53,14 +50,55 @@ describe('Express App', () => {
     it('should have auth routes', async () => {
       await request(app)
         .post('/api/auth/login')
-        .expect(400); // Validation error expected
+        .expect(400); // Validation error expected for empty body
     });
 
-    it('should have planes routes - unauthorized access', async () => {
-      // Проверяем что БЕЗ токена возвращается 401
+    it('should have planes routes', async () => {
       await request(app)
         .get('/api/planes')
-        .expect(401); // Unauthorized expected for protected route
+        .expect(401); // Unauthorized expected
+    });
+
+    it('should have flights routes', async () => {
+      await request(app)
+        .get('/api/flights')
+        .expect(401); // Unauthorized expected
+    });
+
+    it('should have tickets routes', async () => {
+      await request(app)
+        .get('/api/tickets')
+        .expect(401); // Unauthorized expected
+    });
+
+    it('should have reports routes', async () => {
+      await request(app)
+        .get('/api/reports/general')
+        .expect(401); // Unauthorized expected
+    });
+  });
+
+  describe('CORS', () => {
+    it('should handle CORS preflight requests', async () => {
+      const response = await request(app)
+        .options('/api/auth/login')
+        .set('Origin', 'http://localhost:3000')
+        .set('Access-Control-Request-Method', 'POST')
+        .expect(204);
+
+      expect(response.headers['access-control-allow-origin']).toBeDefined();
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle JSON parsing errors', async () => {
+      const response = await request(app)
+        .post('/api/auth/login')
+        .set('Content-Type', 'application/json')
+        .send('invalid json')
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
     });
   });
 });
