@@ -3,6 +3,12 @@
   "version": "1.0.0",
   "description": "Frontend для системы управления авиаперевозками",
   "private": true,
+  "jest": {
+    "transformIgnorePatterns": ["node_modules/(?!axios)/"],
+    "moduleNameMapper": {
+      "^axios$": "axios/dist/axios.js"
+    }
+  },
   "dependencies": {
     "@reduxjs/toolkit": "^1.9.7",
     "@testing-library/jest-dom": "^5.17.0",

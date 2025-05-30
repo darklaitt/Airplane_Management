@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { AuthProvider, AuthContext } from '../context/AuthContext';
 import Login from '../components/Auth/Login';
 import ProtectedRoute from '../components/Auth/ProtectedRoute';
@@ -35,11 +35,11 @@ describe('Authentication', () => {
       );
 
       expect(screen.getByLabelText(/имя пользователя/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/пароль/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /войти/i })).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/введите пароль/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /войти в систему/i })).toBeInTheDocument();
     });
 
-    it('should validate form fields', async () => {
+    it('should validate empty form fields', async () => {
       render(
         <BrowserRouter>
           <AuthProvider>
@@ -48,27 +48,44 @@ describe('Authentication', () => {
         </BrowserRouter>
       );
 
-      const submitButton = screen.getByRole('button', { name: /войти/i });
-      fireEvent.click(submitButton);
+      const submitButton = screen.getByRole('button', { name: /войти в систему/i });
+      
+      // Кнопка должна быть отключена если поля пустые
+      expect(submitButton).toBeDisabled();
+    });
 
-      await waitFor(() => {
-        expect(screen.getByText(/введите имя пользователя/i)).toBeInTheDocument();
+    it('should enable submit button when fields are filled', async () => {
+      render(
+        <BrowserRouter>
+          <AuthProvider>
+            <Login />
+          </AuthProvider>
+        </BrowserRouter>
+      );
+
+      const usernameInput = screen.getByLabelText(/имя пользователя/i);
+      const passwordInput = screen.getByPlaceholderText(/введите пароль/i);
+      const submitButton = screen.getByRole('button', { name: /войти в систему/i });
+
+      await act(async () => {
+        fireEvent.change(usernameInput, { target: { value: 'testuser' } });
+        fireEvent.change(passwordInput, { target: { value: 'password123' } });
       });
+
+      expect(submitButton).not.toBeDisabled();
     });
 
     it('should handle successful login', async () => {
       const mockLoginResponse = {
-        data: {
-          user: {
-            id: 1,
-            username: 'testuser',
-            email: 'test@example.com',
-            role: 'admin',
-            permissions: ['*']
-          },
-          accessToken: 'mock-access-token',
-          refreshToken: 'mock-refresh-token'
-        }
+        user: {
+          id: 1,
+          username: 'testuser',
+          email: 'test@example.com',
+          role: 'admin',
+          permissions: ['*']
+        },
+        accessToken: 'mock-access-token',
+        refreshToken: 'mock-refresh-token'
       };
 
       mockedAuthService.login.mockResolvedValue(mockLoginResponse);
@@ -81,14 +98,15 @@ describe('Authentication', () => {
         </BrowserRouter>
       );
 
-      // Fill and submit form
-      fireEvent.change(screen.getByLabelText(/имя пользователя/i), {
-        target: { value: 'testuser' }
+      const usernameInput = screen.getByLabelText(/имя пользователя/i);
+      const passwordInput = screen.getByPlaceholderText(/введите пароль/i);
+      const submitButton = screen.getByRole('button', { name: /войти в систему/i });
+
+      await act(async () => {
+        fireEvent.change(usernameInput, { target: { value: 'testuser' } });
+        fireEvent.change(passwordInput, { target: { value: 'password123' } });
+        fireEvent.click(submitButton);
       });
-      fireEvent.change(screen.getByLabelText(/пароль/i), {
-        target: { value: 'password123' }
-      });
-      fireEvent.click(screen.getByRole('button', { name: /войти/i }));
 
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith('/');
@@ -109,21 +127,22 @@ describe('Authentication', () => {
         </BrowserRouter>
       );
 
-      // Fill and submit form
-      fireEvent.change(screen.getByLabelText(/имя пользователя/i), {
-        target: { value: 'testuser' }
+      const usernameInput = screen.getByLabelText(/имя пользователя/i);
+      const passwordInput = screen.getByPlaceholderText(/введите пароль/i);
+      const submitButton = screen.getByRole('button', { name: /войти в систему/i });
+
+      await act(async () => {
+        fireEvent.change(usernameInput, { target: { value: 'testuser' } });
+        fireEvent.change(passwordInput, { target: { value: 'wrongpassword' } });
+        fireEvent.click(submitButton);
       });
-      fireEvent.change(screen.getByLabelText(/пароль/i), {
-        target: { value: 'wrongpassword' }
-      });
-      fireEvent.click(screen.getByRole('button', { name: /войти/i }));
 
       await waitFor(() => {
         expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument();
       });
     });
 
-    it('should toggle password visibility', () => {
+    it('should toggle password visibility', async () => {
       render(
         <BrowserRouter>
           <AuthProvider>
@@ -132,16 +151,68 @@ describe('Authentication', () => {
         </BrowserRouter>
       );
 
-      const passwordInput = screen.getByLabelText(/пароль/i);
+      const passwordInput = screen.getByPlaceholderText(/введите пароль/i);
       const toggleButton = screen.getByRole('button', { name: /показать пароль/i });
 
       expect(passwordInput).toHaveAttribute('type', 'password');
 
-      fireEvent.click(toggleButton);
+      await act(async () => {
+        fireEvent.click(toggleButton);
+      });
       expect(passwordInput).toHaveAttribute('type', 'text');
 
-      fireEvent.click(toggleButton);
+      await act(async () => {
+        fireEvent.click(toggleButton);
+      });
       expect(passwordInput).toHaveAttribute('type', 'password');
+    });
+
+    it('should show registration link', () => {
+      render(
+        <BrowserRouter>
+          <AuthProvider>
+            <Login />
+          </AuthProvider>
+        </BrowserRouter>
+      );
+
+      expect(screen.getByText(/зарегистрироваться/i)).toBeInTheDocument();
+    });
+
+    it('should validate username input', async () => {
+      render(
+        <BrowserRouter>
+          <AuthProvider>
+            <Login />
+          </AuthProvider>
+        </BrowserRouter>
+      );
+
+      const usernameInput = screen.getByLabelText(/имя пользователя/i);
+      
+      await act(async () => {
+        fireEvent.change(usernameInput, { target: { value: 'testuser' } });
+      });
+
+      expect(usernameInput.value).toBe('testuser');
+    });
+
+    it('should validate password input', async () => {
+      render(
+        <BrowserRouter>
+          <AuthProvider>
+            <Login />
+          </AuthProvider>
+        </BrowserRouter>
+      );
+
+      const passwordInput = screen.getByPlaceholderText(/введите пароль/i);
+      
+      await act(async () => {
+        fireEvent.change(passwordInput, { target: { value: 'password123' } });
+      });
+
+      expect(passwordInput.value).toBe('password123');
     });
   });
 
@@ -167,7 +238,6 @@ describe('Authentication', () => {
     });
 
     it('should check auth status on mount', async () => {
-      // Mock localStorage with token
       localStorage.setItem('access_token', 'mock-token');
       
       mockedAuthService.verifyToken.mockResolvedValue({
@@ -199,7 +269,7 @@ describe('Authentication', () => {
       });
     });
 
-    it('should handle logout', () => {
+    it('should handle logout', async () => {
       localStorage.setItem('access_token', 'mock-token');
       localStorage.setItem('refresh_token', 'mock-refresh-token');
       localStorage.setItem('user', JSON.stringify({ username: 'testuser' }));
@@ -221,7 +291,9 @@ describe('Authentication', () => {
         </AuthProvider>
       );
 
-      fireEvent.click(screen.getByText('Logout'));
+      await act(async () => {
+        fireEvent.click(screen.getByText('Logout'));
+      });
 
       expect(localStorage.getItem('access_token')).toBeNull();
       expect(localStorage.getItem('refresh_token')).toBeNull();

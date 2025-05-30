@@ -46,6 +46,13 @@ const FlightForm = ({ flight, planes, onSubmit, onClose }) => {
       ...prev,
       stops: newStops
     }));
+    // Очищаем ошибку для stops
+    if (errors.stops) {
+      setErrors(prev => ({
+        ...prev,
+        stops: null
+      }));
+    }
   };
 
   const addStop = () => {
@@ -70,6 +77,8 @@ const FlightForm = ({ flight, planes, onSubmit, onClose }) => {
     
     if (!formData.flight_number) {
       newErrors.flight_number = 'Номер рейса обязателен';
+    } else if (!/^[A-Z0-9]{2,10}$/.test(formData.flight_number)) {
+      newErrors.flight_number = 'Неверный формат номера рейса';
     }
     
     if (!formData.plane_id) {
@@ -114,8 +123,9 @@ const FlightForm = ({ flight, planes, onSubmit, onClose }) => {
     <form onSubmit={handleSubmit}>
       <div className="form-row">
         <div className="form-group">
-          <label>Номер рейса</label>
+          <label htmlFor="flight_number">Номер рейса</label>
           <input
+            id="flight_number"
             type="text"
             name="flight_number"
             className="form-control"
@@ -127,8 +137,9 @@ const FlightForm = ({ flight, planes, onSubmit, onClose }) => {
         </div>
 
         <div className="form-group">
-          <label>Самолет</label>
+          <label htmlFor="plane_id">Самолет</label>
           <select
+            id="plane_id"
             name="plane_id"
             className="form-control"
             value={formData.plane_id}
@@ -154,13 +165,20 @@ const FlightForm = ({ flight, planes, onSubmit, onClose }) => {
               className="form-control"
               value={stop}
               onChange={(e) => handleStopChange(index, e.target.value)}
-              placeholder={index === 0 ? 'Пункт отправления' : index === formData.stops.length - 1 ? 'Пункт назначения' : 'Промежуточная остановка'}
+              placeholder={
+                index === 0 
+                  ? 'Пункт отправления' 
+                  : index === formData.stops.length - 1 
+                    ? 'Пункт назначения' 
+                    : 'Промежуточная остановка'
+              }
             />
             {index > 1 && index < formData.stops.length - 1 && (
               <button
                 type="button"
                 className="btn btn-danger"
                 onClick={() => removeStop(index)}
+                data-testid="remove-stop"
               >
                 ×
               </button>
@@ -179,53 +197,56 @@ const FlightForm = ({ flight, planes, onSubmit, onClose }) => {
 
       <div className="form-row">
         <div className="form-group">
-          <label>Время вылета</label>
+          <label htmlFor="departure_time">Время вылета</label>
           <input
+            id="departure_time"
             type="time"
-           name="departure_time"
-           className="form-control"
-           value={formData.departure_time}
-           onChange={handleChange}
-         />
-         {errors.departure_time && <div className="text-danger">{errors.departure_time}</div>}
-       </div>
+            name="departure_time"
+            className="form-control"
+            value={formData.departure_time}
+            onChange={handleChange}
+          />
+          {errors.departure_time && <div className="text-danger">{errors.departure_time}</div>}
+        </div>
 
-       <div className="form-group">
-         <label>Свободные места</label>
-         <input
-           type="number"
-           name="free_seats"
-           className="form-control"
-           value={formData.free_seats}
-           onChange={handleChange}
-         />
-         {errors.free_seats && <div className="text-danger">{errors.free_seats}</div>}
-       </div>
+        <div className="form-group">
+          <label htmlFor="free_seats">Свободные места</label>
+          <input
+            id="free_seats"
+            type="number"
+            name="free_seats"
+            className="form-control"
+            value={formData.free_seats}
+            onChange={handleChange}
+          />
+          {errors.free_seats && <div className="text-danger">{errors.free_seats}</div>}
+        </div>
 
-       <div className="form-group">
-         <label>Цена билета</label>
-         <input
-           type="number"
-           name="price"
-           className="form-control"
-           value={formData.price}
-           onChange={handleChange}
-           step="0.01"
-         />
-         {errors.price && <div className="text-danger">{errors.price}</div>}
-       </div>
-     </div>
+        <div className="form-group">
+          <label htmlFor="price">Цена билета</label>
+          <input
+            id="price"
+            type="number"
+            name="price"
+            className="form-control"
+            value={formData.price}
+            onChange={handleChange}
+            step="0.01"
+          />
+          {errors.price && <div className="text-danger">{errors.price}</div>}
+        </div>
+      </div>
 
-     <div className="modal-footer">
-       <button type="button" className="btn btn-secondary" onClick={onClose}>
-         Отмена
-       </button>
-       <button type="submit" className="btn btn-primary">
-         {flight ? 'Обновить' : 'Создать'}
-       </button>
-     </div>
-   </form>
- );
+      <div className="modal-footer">
+        <button type="button" className="btn btn-secondary" onClick={onClose}>
+          Отмена
+        </button>
+        <button type="submit" className="btn btn-primary">
+          {flight ? 'Обновить' : 'Создать'}
+        </button>
+      </div>
+    </form>
+  );
 };
 
 export default FlightForm;

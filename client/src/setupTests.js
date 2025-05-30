@@ -41,20 +41,39 @@ global.sessionStorage = sessionStorageMock;
 
 // Suppress console warnings during tests
 const originalWarn = console.warn;
+const originalError = console.error;
+
 beforeAll(() => {
   console.warn = (...args) => {
     if (
-      typeof args[0] === 'string' &&
-      args[0].includes('Warning: An invalid form control')
+      typeof args[0] === 'string' && (
+        args[0].includes('Warning: An invalid form control') ||
+        args[0].includes('React Router Future Flag Warning') ||
+        args[0].includes('ReactDOMTestUtils.act') ||
+        args[0].includes('punycode module is deprecated')
+      )
     ) {
       return;
     }
     originalWarn(...args);
   };
+
+  console.error = (...args) => {
+    if (
+      typeof args[0] === 'string' && (
+        args[0].includes('Warning: `ReactDOMTestUtils.act` is deprecated') ||
+        args[0].includes('punycode module is deprecated')
+      )
+    ) {
+      return;
+    }
+    originalError(...args);
+  };
 });
 
 afterAll(() => {
   console.warn = originalWarn;
+  console.error = originalError;
 });
 
 // Clean up after each test

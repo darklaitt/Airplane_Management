@@ -7,46 +7,25 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authError, setAuthError] = useState(null);
 
-  // Check authentication status on mount
+  // Проверяем токен при загрузке приложения
   useEffect(() => {
     checkAuthStatus();
   }, []);
 
   const checkAuthStatus = async () => {
     try {
-      setLoading(true);
       const token = localStorage.getItem('access_token');
-      if (!token) {
-        // No token found, user is not authenticated
-        setIsAuthenticated(false);
-        setUser(null);
-        return;
-      }
-
-      // Try to get user from localStorage first for immediate UI update
-      const storedUser = authService.getStoredUser();
-      if (storedUser) {
-        setUser(storedUser);
-        setIsAuthenticated(true);
-      }
-
-      // Then verify with server (async)
-      try {
-        const userData = await authService.verifyToken();
+      if (token) {
+        // Проверяем валидность токена
+        const response = await authService.verifyToken();
+        const userData = response.data || response;
         setUser(userData);
         setIsAuthenticated(true);
-        setAuthError(null);
-      } catch (verifyError) {
-        console.warn('Token verification failed:', verifyError);
-        logout();
       }
     } catch (error) {
-      console.error('Auth status check failed:', error);
-      // Token invalid or expired, clear stored data
+      // Токен недействителен, очищаем localStorage
       logout();
-      setAuthError('Сессия истекла. Пожалуйста, войдите снова.');
     } finally {
       setLoading(false);
     }
@@ -54,42 +33,31 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      setLoading(true);
       const response = await authService.login(username, password);
-      
-      const { user: userData } = response.data;
+      const userData = response.user || response.data?.user;
+      const accessToken = response.accessToken || response.data?.accessToken;
+      const refreshToken = response.refreshToken || response.data?.refreshToken;
+
+      // Сохраняем токены в localStorage (в продакшене лучше использовать httpOnly куки)
+      localStorage.setItem('access_token', accessToken);
+      localStorage.setItem('refresh_token', refreshToken);
+      localStorage.setItem('user', JSON.stringify(userData));
+
       setUser(userData);
       setIsAuthenticated(true);
-      setAuthError(null);
       
       return userData;
     } catch (error) {
-      console.error('Login failed:', error);
-      setAuthError(error.message || 'Ошибка входа в систему');
       throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const register = async (userData) => {
-    try {
-      setLoading(true);
-      const response = await authService.register(userData);
-      
-      setAuthError(null);
-      return response.data;
-    } catch (error) {
-      console.error('Registration failed:', error);
-      setAuthError(error.message || 'Ошибка регистрации');
-      throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
   const logout = () => {
-    authService.logout();
+    // Очищаем localStorage
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+
     setUser(null);
     setIsAuthenticated(false);
   };
@@ -102,65 +70,44 @@ export const AuthProvider = ({ children }) => {
       }
 
       const response = await authService.refreshToken(refreshToken);
-      return response.data.accessToken;
+      const accessToken = response.data?.accessToken || response.accessToken;
+
+      localStorage.setItem('access_token', accessToken);
+      return accessToken;
     } catch (error) {
-      console.error('Token refresh failed:', error);
       logout();
       throw error;
     }
   };
 
-  // Check if user has specific permission
   const checkPermission = (permission) => {
-    if (!user || !user.permissions) {
-      return false;
-    }
+    if (!user || !user.permissions) return false;
     
-    // Admin has all permissions
-    if (user.permissions.includes('*')) {
-      return true;
-    }
+    // Админ имеет все права
+    if (user.permissions.includes('*')) return true;
     
-    // Check specific permission
+    // Проверяем конкретное разрешение
     return user.permissions.includes(permission);
   };
 
-  // Check if user has specific role
   const hasRole = (role) => {
     return user && user.role === role;
   };
 
-  // Get user's full name or username
-  const getUserDisplayName = () => {
-    if (!user) return '';
-    
-    if (user.first_name && user.last_name) {
-      return `${user.first_name} ${user.last_name}`;
-    } else if (user.first_name) {
-      return user.first_name;
-    }
-    
-    return user.username;
-  };
-
-  // Context value
-  const authContextValue = {
+  const value = {
     user,
     loading,
     isAuthenticated,
-    error: authError,
     login,
-    register,
     logout,
     refreshAccessToken,
     checkPermission,
     hasRole,
-    getUserDisplayName,
     checkAuthStatus
   };
 
   return (
-    <AuthContext.Provider value={authContextValue}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,27 +1,18 @@
+// server/tests/app.test.js
 const request = require('supertest');
 const app = require('../src/app');
 
 // Mock database connection
 jest.mock('../src/utils/database', () => ({
-  testConnection: jest.fn(),
-  query: jest.fn(),
-  getClient: jest.fn()
+  testConnection: jest.fn(() => Promise.resolve()),
+  query: jest.fn(() => Promise.resolve([])),
+  getClient: jest.fn(() => Promise.resolve({
+    query: jest.fn(),
+    release: jest.fn()
+  }))
 }));
 
-// Mock User model
-jest.mock('../src/models/User');
-
 describe('Express App', () => {
-  beforeAll(async () => {
-    // Mock database connection
-    const { testConnection } = require('../src/utils/database');
-    testConnection.mockResolvedValue(true);
-  });
-
-  afterAll(async () => {
-    // Cleanup
-  });
-
   describe('Health Check', () => {
     it('should return 200 and health status', async () => {
       const response = await request(app)
@@ -50,31 +41,32 @@ describe('Express App', () => {
     it('should have auth routes', async () => {
       await request(app)
         .post('/api/auth/login')
-        .expect(400); // Validation error expected for empty body
+        .send({}) // Empty body to trigger validation error
+        .expect(400);
     });
 
     it('should have planes routes', async () => {
       await request(app)
         .get('/api/planes')
-        .expect(401); // Unauthorized expected
+        .expect(401); // Unauthorized expected without token
     });
 
     it('should have flights routes', async () => {
       await request(app)
         .get('/api/flights')
-        .expect(401); // Unauthorized expected
+        .expect(401); // Unauthorized expected without token
     });
 
     it('should have tickets routes', async () => {
       await request(app)
         .get('/api/tickets')
-        .expect(401); // Unauthorized expected
+        .expect(401); // Unauthorized expected without token
     });
 
     it('should have reports routes', async () => {
       await request(app)
         .get('/api/reports/general')
-        .expect(401); // Unauthorized expected
+        .expect(401); // Unauthorized expected without token
     });
   });
 
@@ -98,7 +90,7 @@ describe('Express App', () => {
         .send('invalid json')
         .expect(400);
 
-      expect(response.body.success).toBe(false);
+      expect(response.body).toHaveProperty('success', false);
     });
   });
 });
