@@ -1,200 +1,61 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import FlightList from '../components/Flights/FlightList';
-import FlightForm from '../components/Flights/FlightForm';
-import FlightSearch from '../components/Flights/FlightSearch';
-import Modal from '../components/Common/Modal';
+import api from '../services/apiService';
 import Loader from '../components/Common/Loader';
 import ErrorMessage from '../components/Common/ErrorMessage';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-
 const Flights = () => {
   const [flights, setFlights] = useState([]);
-  const [planes, setPlanes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
-  const [editingFlight, setEditingFlight] = useState(null);
-  const [searchResults, setSearchResults] = useState(null);
 
   useEffect(() => {
     fetchFlights();
-    fetchPlanes();
   }, []);
 
   const fetchFlights = async () => {
     try {
       setLoading(true);
+      const response = await api.get('/flights');
+      setFlights(response.data.data);
       setError(null);
-      console.log('Fetching flights from:', `${API_URL}/flights`);
-      
-      const response = await axios.get(`${API_URL}/flights`);
-      console.log('Flights response:', response.data);
-      
-      if (response.data && response.data.success) {
-        setFlights(response.data.data || []);
-      } else {
-        setFlights(response.data || []);
-      }
     } catch (err) {
-      console.error('Error fetching flights:', err);
       setError(err.response?.data?.message || 'Ошибка загрузки рейсов');
-      setFlights([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchPlanes = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/planes`);
-      console.log('Planes for flights:', response.data);
-      
-      if (response.data && response.data.success) {
-        setPlanes(response.data.data || []);
-      } else {
-        setPlanes(response.data || []);
-      }
-    } catch (err) {
-      console.error('Error fetching planes:', err);
-      setPlanes([]);
-    }
-  };
-
-  const handleSubmit = async (flightData) => {
-    try {
-      setError(null);
-      console.log('Submitting flight data:', flightData);
-      
-      if (editingFlight) {
-        // Обновление существующего рейса
-        console.log('Updating flight with ID:', editingFlight.id);
-        const url = `${API_URL}/flights/${editingFlight.id}`;
-        console.log('PUT URL:', url);
-        
-        const response = await axios.put(url, flightData);
-        console.log('Update response:', response.data);
-        
-        setSuccess('Рейс успешно обновлен');
-      } else {
-        // Создание нового рейса
-        console.log('Creating new flight');
-        const url = `${API_URL}/flights`;
-        console.log('POST URL:', url);
-        
-        const response = await axios.post(url, flightData);
-        console.log('Create response:', response.data);
-        
-        setSuccess('Рейс успешно добавлен');
-      }
-      
-      await fetchFlights();
-      handleCloseForm();
-      
-    } catch (err) {
-      console.error('Error submitting flight:', err);
-      console.error('Error response:', err.response?.data);
-      setError(err.response?.data?.message || 'Ошибка сохранения рейса');
-    }
-  };
-
   const handleDelete = async (id) => {
-    if (!id) {
-      setError('ID рейса не указан');
-      return;
-    }
-    
     if (window.confirm('Вы уверены, что хотите удалить этот рейс?')) {
       try {
-        setError(null);
-        console.log('Deleting flight with ID:', id);
-        const url = `${API_URL}/flights/${id}`;
-        console.log('DELETE URL:', url);
-        
-        const response = await axios.delete(url);
-        console.log('Delete response:', response.data);
-        
+        await api.delete(`/flights/${id}`);
         setSuccess('Рейс успешно удален');
-        await fetchFlights();
-        
+        fetchFlights();
       } catch (err) {
-        console.error('Error deleting flight:', err);
-        console.error('Error response:', err.response?.data);
         setError(err.response?.data?.message || 'Ошибка удаления рейса');
       }
     }
   };
 
-  const handleSearch = async (type, params) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      let response;
-      console.log('Searching flights:', type, params);
-      
-      switch (type) {
-        case 'nearest':
-          response = await axios.get(`${API_URL}/flights/search/nearest`, { params });
-          setSearchResults(response.data.success ? response.data.data : response.data);
-          break;
-        case 'non-stop':
-          response = await axios.get(`${API_URL}/flights/search/non-stop`);
-          setFlights(response.data.success ? response.data.data : response.data);
-          break;
-        case 'most-expensive':
-          response = await axios.get(`${API_URL}/flights/search/most-expensive`);
-          setSearchResults(response.data.success ? response.data.data : response.data);
-          break;
-        case 'replacement':
-          response = await axios.get(`${API_URL}/flights/search/replacement-candidates`);
-          setFlights(response.data.success ? response.data.data : response.data);
-          break;
-        case 'check-seats':
-          response = await axios.get(`${API_URL}/flights/check-seats/${params.flightNumber}`);
-          setSearchResults(response.data.success ? response.data.data : response.data);
-          break;
-        default:
-          break;
-      }
-      
-      setShowSearch(false);
-      
-    } catch (err) {
-      console.error('Search error:', err);
-      setError(err.response?.data?.message || 'Ошибка поиска');
-    } finally {
-      setLoading(false);
-    }
+  const formatPrice = (price) => {
+    return new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency: 'RUB',
+      minimumFractionDigits: 0
+    }).format(price);
   };
 
-  const handleEdit = (flight) => {
-    console.log('Editing flight:', flight);
-    if (!flight || !flight.id) {
-      setError('Неверные данные рейса');
-      return;
-    }
-    setEditingFlight(flight);
-    setShowForm(true);
+  const formatStops = (stops) => {
+    if (!stops || stops.length === 0) return '';
+    return stops.join(' → ');
   };
 
-  const handleAdd = () => {
-    console.log('Adding new flight');
-    setEditingFlight(null);
-    setShowForm(true);
-  };
-
-  const handleCloseForm = () => {
-    setShowForm(false);
-    setEditingFlight(null);
-  };
-
-  const clearSearchResults = () => {
-    setSearchResults(null);
-    fetchFlights();
+  const getStatusBadge = (freeSeats, totalSeats) => {
+    const percentage = (freeSeats / totalSeats) * 100;
+    if (percentage > 50) return 'badge-success';
+    if (percentage > 20) return 'badge-warning';
+    return 'badge-danger';
   };
 
   useEffect(() => {
@@ -207,17 +68,17 @@ const Flights = () => {
     }
   }, [error, success]);
 
-  if (loading && !searchResults) return <Loader />;
+  if (loading) return <Loader text="Загрузка рейсов..." />;
 
   return (
     <div className="flights-page">
       <div className="page-header">
         <h1>Управление рейсами</h1>
         <div className="actions">
-          <button className="btn btn-secondary" onClick={() => setShowSearch(true)}>
+          <button className="btn btn-secondary">
             🔍 Поиск рейсов
           </button>
-          <button className="btn btn-primary" onClick={handleAdd}>
+          <button className="btn btn-primary">
             ➕ Добавить рейс
           </button>
         </div>
@@ -226,68 +87,62 @@ const Flights = () => {
       {error && <ErrorMessage message={error} type="danger" />}
       {success && <ErrorMessage message={success} type="success" />}
 
-      {searchResults && (
-        <div className="search-results">
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">Результаты поиска</h3>
-              <button 
-                className="btn btn-secondary btn-sm" 
-                onClick={clearSearchResults}
-              >
-                Закрыть
-              </button>
+      <div className="card">
+        <div className="card-body">
+          {flights.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">🛫</div>
+              <p>Рейсы не найдены</p>
+              <p>Добавьте первый рейс в систему</p>
             </div>
-            <div className="card-body">
-              {searchResults.flight_number ? (
-                <div>
-                  <p><strong>Номер рейса:</strong> {searchResults.flight_number}</p>
-                  <p><strong>Свободные места:</strong> {searchResults.free_seats}</p>
-                  <p><strong>Статус:</strong> {searchResults.has_free_seats ? 'Есть свободные места' : 'Мест нет'}</p>
-                </div>
-              ) : (
-                <FlightList
-                  flights={[searchResults]}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                />
-              )}
+          ) : (
+            <div className="table-responsive">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Номер рейса</th>
+                    <th>Самолет</th>
+                    <th>Маршрут</th>
+                    <th>Время вылета</th>
+                    <th>Свободные места</th>
+                    <th>Цена</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {flights.map(flight => (
+                    <tr key={flight.id}>
+                      <td>{flight.flight_number}</td>
+                      <td>{flight.plane_name || 'N/A'}</td>
+                      <td>{formatStops(flight.stops)}</td>
+                      <td>{flight.departure_time}</td>
+                      <td>
+                        <span className={`badge ${getStatusBadge(flight.free_seats, flight.seats_count)}`}>
+                          {flight.free_seats} из {flight.seats_count}
+                        </span>
+                      </td>
+                      <td>{formatPrice(flight.price)}</td>
+                      <td>
+                        <div className="action-buttons">
+                          <button className="btn btn-secondary btn-sm">
+                            ✏️ Редактировать
+                          </button>
+                          <button 
+                            className="btn btn-danger btn-sm"
+                            onClick={() => handleDelete(flight.id)}
+                          >
+                            🗑️ Удалить
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          )}
         </div>
-      )}
-
-      {!searchResults && (
-        <FlightList
-          flights={flights}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-        />
-      )}
-
-      <Modal
-        isOpen={showForm}
-        onClose={handleCloseForm}
-        title={editingFlight ? 'Редактировать рейс' : 'Добавить рейс'}
-      >
-        <FlightForm
-          flight={editingFlight}
-          planes={planes}
-          onSubmit={handleSubmit}
-          onClose={handleCloseForm}
-        />
-      </Modal>
-
-      <Modal
-        isOpen={showSearch}
-        onClose={() => setShowSearch(false)}
-        title="Поиск рейсов"
-      >
-        <FlightSearch
-          onSearch={handleSearch}
-          onClose={() => setShowSearch(false)}
-        />
-      </Modal>
+      </div>
     </div>
   );
 };

@@ -3,8 +3,18 @@ import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 
 const Header = () => {
-  const { user, isAuthenticated, logout, getUserDisplayName } = useContext(AuthContext);
+  const { user, isAuthenticated, logout } = useContext(AuthContext);
   const location = useLocation();
+
+  const getUserDisplayName = (user) => {
+    if (user?.first_name && user?.last_name) {
+      return `${user.first_name} ${user.last_name}`;
+    }
+    if (user?.first_name) {
+      return user.first_name;
+    }
+    return user?.username || 'Пользователь';
+  };
 
   const handleLogout = () => {
     if (window.confirm('Вы уверены, что хотите выйти?')) {
@@ -15,22 +25,6 @@ const Header = () => {
   const isActiveRoute = (path) => {
     return location.pathname === path ? 'active' : '';
   };
-
-  // Map roles to human-readable names and colors
-  const roleInfo = {
-    admin: { name: 'Администратор', className: 'badge-danger' },
-    manager: { name: 'Менеджер', className: 'badge-warning' },
-    cashier: { name: 'Кассир', className: 'badge-success' },
-    analyst: { name: 'Аналитик', className: 'badge-info' }
-  };
-
-  // Get role display info
-  const getRoleDisplay = () => {
-    if (!user || !user.role) return { name: 'Пользователь', className: 'badge-secondary' };
-    return roleInfo[user.role] || { name: user.role, className: 'badge-secondary' };
-  };
-
-  const roleDisplay = getRoleDisplay();
 
   return (
     <header className="header">
@@ -79,10 +73,10 @@ const Header = () => {
               <div className="navbar-user">
                 <div className="user-info">
                   <span className="user-greeting">
-                    👋 {getUserDisplayName()}
+                    👋 Привет, {getUserDisplayName(user)}!
                   </span>
-                  <span className={`user-role badge ${roleDisplay.className}`}>
-                    {roleDisplay.name}
+                  <span className="user-role badge badge-info">
+                    {user?.role || 'Пользователь'}
                   </span>
                 </div>
                 <button 
@@ -98,9 +92,6 @@ const Header = () => {
             <div className="navbar-auth">
               <Link to="/login" className="btn btn-light">
                 🔑 Войти
-              </Link>
-              <Link to="/register" className="btn btn-outline-light ms-2">
-                📝 Регистрация
               </Link>
             </div>
           )}

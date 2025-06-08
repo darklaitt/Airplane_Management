@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/apiService';
 import Loader from '../components/Common/Loader';
 import ErrorMessage from '../components/Common/ErrorMessage';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const Home = () => {
   const [stats, setStats] = useState(null);
@@ -14,7 +12,7 @@ const Home = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await axios.get(`${API_URL}/reports/general`);
+        const response = await api.get('/reports/general');
         setStats(response.data.data.summary);
       } catch (err) {
         setError(err.response?.data?.message || 'Ошибка загрузки статистики');
@@ -26,7 +24,7 @@ const Home = () => {
     fetchStats();
   }, []);
 
-  if (loading) return <Loader />;
+  if (loading) return <Loader text="Загрузка статистики..." />;
   if (error) return <ErrorMessage message={error} />;
 
   return (

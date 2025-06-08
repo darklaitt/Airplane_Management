@@ -16,12 +16,22 @@ export const AuthProvider = ({ children }) => {
   const checkAuthStatus = async () => {
     try {
       const token = localStorage.getItem('access_token');
-      if (token) {
-        // Проверяем валидность токена
-        const response = await authService.verifyToken();
-        const userData = response.data || response;
-        setUser(userData);
+      const userData = localStorage.getItem('user');
+      
+      if (token && userData) {
+        // Сначала пытаемся использовать данные из localStorage
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
         setIsAuthenticated(true);
+        
+        // Затем проверяем валидность токена
+        try {
+          const response = await authService.verifyToken();
+          setUser(response.data);
+        } catch (error) {
+          // Если токен недействителен, очищаем данные
+          logout();
+        }
       }
     } catch (error) {
       // Токен недействителен, очищаем localStorage
@@ -34,11 +44,9 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password) => {
     try {
       const response = await authService.login(username, password);
-      const userData = response.user || response.data?.user;
-      const accessToken = response.accessToken || response.data?.accessToken;
-      const refreshToken = response.refreshToken || response.data?.refreshToken;
+      const { user: userData, accessToken, refreshToken } = response.data;
 
-      // Сохраняем токены в localStorage (в продакшене лучше использовать httpOnly куки)
+      // Сохраняем токены в localStorage
       localStorage.setItem('access_token', accessToken);
       localStorage.setItem('refresh_token', refreshToken);
       localStorage.setItem('user', JSON.stringify(userData));
@@ -70,7 +78,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       const response = await authService.refreshToken(refreshToken);
-      const accessToken = response.data?.accessToken || response.accessToken;
+      const { accessToken } = response.data;
 
       localStorage.setItem('access_token', accessToken);
       return accessToken;

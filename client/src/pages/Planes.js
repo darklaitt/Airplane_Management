@@ -1,21 +1,13 @@
-
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import PlaneList from '../components/Planes/PlaneList';
-import PlaneForm from '../components/Planes/PlaneForm';
-import Modal from '../components/Common/Modal';
+import api from '../services/apiService';
 import Loader from '../components/Common/Loader';
 import ErrorMessage from '../components/Common/ErrorMessage';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const Planes = () => {
   const [planes, setPlanes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editingPlane, setEditingPlane] = useState(null);
 
   useEffect(() => {
     fetchPlanes();
@@ -24,113 +16,28 @@ const Planes = () => {
   const fetchPlanes = async () => {
     try {
       setLoading(true);
+      const response = await api.get('/planes');
+      setPlanes(response.data.data);
       setError(null);
-      console.log('Fetching planes from:', `${API_URL}/planes`);
-      
-      const response = await axios.get(`${API_URL}/planes`);
-      console.log('Planes response:', response.data);
-      
-      if (response.data && response.data.success) {
-        setPlanes(response.data.data || []);
-      } else {
-        setPlanes(response.data || []);
-      }
     } catch (err) {
-      console.error('Error fetching planes:', err);
       setError(err.response?.data?.message || 'Ошибка загрузки самолетов');
-      setPlanes([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (planeData) => {
-    try {
-      setError(null);
-      console.log('Submitting plane data:', planeData);
-      
-      if (editingPlane) {
-        // Обновление существующего самолета
-        console.log('Updating plane with ID:', editingPlane.id);
-        const url = `${API_URL}/planes/${editingPlane.id}`;
-        console.log('PUT URL:', url);
-        
-        const response = await axios.put(url, planeData);
-        console.log('Update response:', response.data);
-        
-        setSuccess('Самолет успешно обновлен');
-      } else {
-        // Создание нового самолета
-        console.log('Creating new plane');
-        const url = `${API_URL}/planes`;
-        console.log('POST URL:', url);
-        
-        const response = await axios.post(url, planeData);
-        console.log('Create response:', response.data);
-        
-        setSuccess('Самолет успешно добавлен');
-      }
-      
-      // Перезагружаем список самолетов
-      await fetchPlanes();
-      handleCloseForm();
-      
-    } catch (err) {
-      console.error('Error submitting plane:', err);
-      console.error('Error response:', err.response?.data);
-      setError(err.response?.data?.message || 'Ошибка сохранения самолета');
-    }
-  };
-
   const handleDelete = async (id) => {
-    if (!id) {
-      setError('ID самолета не указан');
-      return;
-    }
-    
     if (window.confirm('Вы уверены, что хотите удалить этот самолет?')) {
       try {
-        setError(null);
-        console.log('Deleting plane with ID:', id);
-        const url = `${API_URL}/planes/${id}`;
-        console.log('DELETE URL:', url);
-        
-        const response = await axios.delete(url);
-        console.log('Delete response:', response.data);
-        
+        await api.delete(`/planes/${id}`);
         setSuccess('Самолет успешно удален');
-        await fetchPlanes();
-        
+        fetchPlanes();
       } catch (err) {
-        console.error('Error deleting plane:', err);
-        console.error('Error response:', err.response?.data);
         setError(err.response?.data?.message || 'Ошибка удаления самолета');
       }
     }
   };
 
-  const handleEdit = (plane) => {
-    console.log('Editing plane:', plane);
-    if (!plane || !plane.id) {
-      setError('Неверные данные самолета');
-      return;
-    }
-    setEditingPlane(plane);
-    setShowForm(true);
-  };
-
-  const handleAdd = () => {
-    console.log('Adding new plane');
-    setEditingPlane(null);
-    setShowForm(true);
-  };
-
-  const handleCloseForm = () => {
-    setShowForm(false);
-    setEditingPlane(null);
-  };
-
-  // Автоматически скрываем сообщения через 5 секунд
   useEffect(() => {
     if (error || success) {
       const timer = setTimeout(() => {
@@ -141,13 +48,13 @@ const Planes = () => {
     }
   }, [error, success]);
 
-  if (loading) return <Loader />;
+  if (loading) return <Loader text="Загрузка самолетов..." />;
 
   return (
     <div className="planes-page">
       <div className="page-header">
         <h1>Управление самолетами</h1>
-        <button className="btn btn-primary" onClick={handleAdd}>
+        <button className="btn btn-primary">
           ➕ Добавить самолет
         </button>
       </div>
@@ -155,25 +62,56 @@ const Planes = () => {
       {error && <ErrorMessage message={error} type="danger" />}
       {success && <ErrorMessage message={success} type="success" />}
 
-      <div className="planes-content">
-        <PlaneList
-          planes={planes}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-        />
+      <div className="card">
+        <div className="card-body">
+          {planes.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">✈️</div>
+              <p>Самолеты не найдены</p>
+              <p>Добавьте первый самолет в систему</p>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Название</th>
+                    <th>Категория</th>
+                    <th>Кол-во мест</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {planes.map(plane => (
+                    <tr key={plane.id}>
+                      <td>{plane.id}</td>
+                      <td>{plane.name}</td>
+                      <td>
+                        <span className="badge badge-info">{plane.category}</span>
+                      </td>
+                      <td>{plane.seats_count}</td>
+                      <td>
+                        <div className="action-buttons">
+                          <button className="btn btn-secondary btn-sm">
+                            ✏️ Редактировать
+                          </button>
+                          <button 
+                            className="btn btn-danger btn-sm"
+                            onClick={() => handleDelete(plane.id)}
+                          >
+                            🗑️ Удалить
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
-
-      <Modal
-        isOpen={showForm}
-        onClose={handleCloseForm}
-        title={editingPlane ? 'Редактировать самолет' : 'Добавить самолет'}
-      >
-        <PlaneForm
-          plane={editingPlane}
-          onSubmit={handleSubmit}
-          onClose={handleCloseForm}
-        />
-      </Modal>
     </div>
   );
 };
